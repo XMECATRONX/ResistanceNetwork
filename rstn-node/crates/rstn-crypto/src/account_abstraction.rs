@@ -20,7 +20,7 @@
 //!   - Scheme rotation changes validation without changing the address.
 
 use crate::{
-    keccak512, Dilithium3Keypair, Dilithium3PublicKey,
+    keccak512, Dilithium3PublicKey,
     Dilithium3Signature, verify_signature, CryptoError, ADDRESS_SIZE,
 };
 use serde::{Deserialize, Serialize};
