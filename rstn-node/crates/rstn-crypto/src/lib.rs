@@ -674,11 +674,48 @@ pub struct SphincsKeypair {
     pub signing_key: slh_dsa::SigningKey<slh_dsa::Shake128f>,
 }
 
+// slh-dsa 0.2 / signature 3.0 depend on `rand_core 0.10`, which REMOVED the
+// `OsRng` struct entirely (moved into the `rand` crate behind an `os_rng`
+// feature we don't depend on). Neither `rand_core::OsRng` (our workspace's
+// 0.6 version) nor `signature::rand_core::OsRng` (0.10 -- no such item)
+// exist as a drop-in RNG for `SigningKey::new` / `sign_with_rng`.
+//
+// Rather than add a second, semver-conflicting `rand`/`rand_core` dependency
+// just to source OS entropy, this wrapper implements the `rand_core 0.10`
+// trait surface (`TryRng` + marker `TryCryptoRng`/`CryptoRng`, reached via
+// `signature::rand_core` since `signature 3.0` re-exports that exact crate)
+// and sources the actual randomness from our existing `rand_core = 0.6`
+// (workspace) `OsRng`, already used for Kyber768/hybrid keys in this file.
+struct SphincsOsRng;
+
+impl signature::rand_core::TryRng for SphincsOsRng {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        use rand_core::RngCore; // rand_core 0.6 (workspace dependency)
+        Ok(rand_core::OsRng.next_u32())
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        use rand_core::RngCore;
+        Ok(rand_core::OsRng.next_u64())
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+        use rand_core::RngCore;
+        rand_core::OsRng.fill_bytes(dst);
+        Ok(())
+    }
+}
+
+// Marker traits: safe to implement since the underlying entropy source
+// (the OS CSPRNG via rand_core 0.6's `OsRng`) is cryptographically secure.
+impl signature::rand_core::TryCryptoRng for SphincsOsRng {}
+impl signature::rand_core::CryptoRng for SphincsOsRng {}
+
 impl SphincsKeypair {
     pub fn generate() -> Self {
-        // slh-dsa 0.2 requires signature 3.0's rand_core 0.10 CryptoRng bound.
-        // `signature::rand_core::OsRng` (rand_core 0.10) implements it directly.
-        let mut rng = signature::rand_core::OsRng;
+        let mut rng = SphincsOsRng;
         let signing_key = slh_dsa::SigningKey::<slh_dsa::Shake128f>::new(&mut rng);
         Self { signing_key }
     }
@@ -695,7 +732,7 @@ impl SphincsKeypair {
     /// Sign a message using official FIPS 205 / SLH-DSA (Shake128f).
     pub fn sign(&self, message: &[u8]) -> SphincsSignature {
         use signature::RandomizedSigner;
-        let mut rng = signature::rand_core::OsRng;
+        let mut rng = SphincsOsRng;
         let sig = self.signing_key.sign_with_rng(&mut rng, message);
         // `sig.to_bytes()` returns a `hybrid_array::Array` which implements
         // `AsRef<[u8; N]>` AND `AsRef<[u8]>` — a bare `.as_ref()` is ambiguous
