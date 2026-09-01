@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RSTN Wallet</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <svg class="logo-svg" viewBox="0 0 100 100" width="24" height="24" fill="none">
+          <defs>
+            <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00E673"/>
+              <stop offset="100%" stop-color="#12A55C"/>
+            </linearGradient>
+          </defs>
+          <path d="M 26 20 L 26 80 L 46 52" stroke="url(#logo-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M 54 48 L 74 20 L 74 80" stroke="url(#logo-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <span class="logo-text">RSTN</span>
+      </div>
+      <div class="header-right">
+        <div class="network-badge" id="networkBadge">Testnet</div>
+        <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Connection status bar -->
+    <div class="conn-bar" id="connBar">
+      <span class="conn-dot" id="connDot"></span>
+      <span class="conn-text" id="connText">Checking connection...</span>
+    </div>
+
+    <!-- View: Locked -->
+    <section id="lockedView" class="view hidden">
+      <h2 class="view-title">Wallet Locked</h2>
+      <p class="view-subtitle">Enter your password to unlock</p>
+      <input type="password" id="unlockPassword" class="input" placeholder="Password" autocomplete="current-password" />
+      <button id="unlockBtn" class="btn btn-primary">Unlock</button>
+      <p class="error" id="unlockError"></p>
+    </section>
+
+    <!-- View: Onboarding -->
+    <section id="onboardingView" class="view hidden">
+      <div class="onboarding-hero">
+        <div class="onboarding-icon">
+          <svg width="48" height="48" viewBox="0 0 100 100" fill="none">
+            <defs>
+              <linearGradient id="onboard-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00E673"/>
+                <stop offset="100%" stop-color="#12A55C"/>
+              </linearGradient>
+            </defs>
+            <path d="M 26 20 L 26 80 L 46 52" stroke="url(#onboard-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <path d="M 54 48 L 74 20 L 74 80" stroke="url(#onboard-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <h2 class="view-title">Create Post-Quantum Wallet</h2>
+        <p class="view-subtitle">Your keys use Dilithium3 (ML-DSA-65, FIPS 204) — resistant to Shor & Grover. Not compatible with MetaMask.</p>
+      </div>
+      <input type="password" id="createPassword" class="input" placeholder="Password (min 8 chars)" autocomplete="new-password" />
+      <input type="password" id="confirmPassword" class="input" placeholder="Confirm password" autocomplete="new-password" />
+      <button id="createBtn" class="btn btn-primary">Create Wallet</button>
+      <div class="divider"><span>or</span></div>
+      <button id="importBtn" class="btn btn-secondary">Import from Seed</button>
+      <p class="error" id="createError"></p>
+    </section>
+
+    <!-- View: Import -->
+    <section id="importView" class="view hidden">
+      <h2 class="view-title">Import Wallet</h2>
+      <p class="view-subtitle">Enter your 12 or 24-word seed phrase. Keys are regenerated deterministically.</p>
+      <textarea id="seedPhrase" class="input textarea" placeholder="word1 word2 word3 ... word12" rows="3"></textarea>
+      <input type="password" id="importPassword" class="input" placeholder="New password (min 8 chars)" autocomplete="new-password" />
+      <input type="password" id="importConfirmPassword" class="input" placeholder="Confirm password" autocomplete="new-password" />
+      <button id="importConfirmBtn" class="btn btn-primary">Import Wallet</button>
+      <button id="importBackBtn" class="btn btn-ghost btn-block">Back</button>
+      <p class="error" id="importError"></p>
+    </section>
+
+    <!-- View: Dashboard -->
+    <section id="dashboardView" class="view hidden">
+      <!-- Account selector (multi-account) -->
+      <div class="account-selector" id="accountSelector">
+        <button class="account-btn" id="accountSwitchBtn">
+          <span class="account-avatar" id="accountAvatar">1</span>
+          <div class="account-info">
+            <span class="account-name" id="accountName">Account 1</span>
+            <span class="account-address" id="addressValue">—</span>
+          </div>
+          <svg class="account-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Balance card -->
+      <div class="balance-card">
+        <span class="balance-label">Balance</span>
+        <span class="balance-value" id="balanceValue">0.00 RSTN</span>
+        <span class="balance-usd" id="balanceUsd">≈ $0.00</span>
+        <button id="faucetBtn" class="btn btn-secondary btn-block" style="margin-top:10px;font-size:12px;">Claim 1,000 RSTN from Faucet</button>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="action-btn" id="sendBtn">
+          <span class="action-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </span>
+          <span>Send</span>
+        </button>
+        <button class="action-btn" id="receiveBtn">
+          <span class="action-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          </span>
+          <span>Receive</span>
+        </button>
+        <button class="action-btn" id="stakeBtn">
+          <span class="action-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </span>
+          <span>Stake</span>
+        </button>
+      </div>
+
+      <!-- Tabs: Activity / Pending -->
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabActivity">Activity</button>
+        <button class="tab-btn" id="tabPending">Pending <span class="tab-badge" id="pendingBadge" style="display:none">0</span></button>
+      </div>
+
+      <!-- Transaction list -->
+      <div class="tx-list">
+        <div id="txList" class="tx-items">
+          <span class="tx-empty">No transactions yet</span>
+        </div>
+      </div>
+
+      <button id="lockBtn" class="btn btn-secondary btn-block">Lock Wallet</button>
+    </section>
+
+    <!-- View: Receive -->
+    <section id="receiveView" class="view hidden">
+      <h2 class="view-title">Receive RSTN</h2>
+      <canvas id="qrCanvas" alt="QR code for your Resistance address"></canvas>
+      <img id="qrCode" class="qr-image" alt="" style="display:none" />
+      <span class="address-value" id="receiveAddress">—</span>
+      <button id="copyReceiveBtn" class="btn btn-secondary btn-block">Copy Address</button>
+      <button id="receiveBackBtn" class="btn btn-ghost btn-block">Back</button>
+    </section>
+
+    <!-- View: Send -->
+    <section id="sendView" class="view hidden">
+      <h2 class="view-title">Send RSTN</h2>
+      <input type="text" id="sendTo" class="input" placeholder="Recipient address (rstn1...)" />
+      <input type="number" id="sendAmount" class="input" placeholder="Amount RSTN" step="0.0001" min="0" />
+      <div class="balance-hint">
+        <span>Available: <span id="sendAvailable">0.00</span> RSTN</span>
+        <button class="max-btn" id="sendMaxBtn">Max</button>
+      </div>
+      <span class="fee-info" id="feeInfo">Network fee: ~0.001 RSTN</span>
+      <button id="sendConfirmBtn" class="btn btn-primary btn-block">Review Transaction</button>
+      <button id="sendBackBtn" class="btn btn-ghost btn-block">Cancel</button>
+      <p class="error" id="sendError"></p>
+    </section>
+
+    <!-- View: Confirm -->
+    <section id="confirmView" class="view hidden">
+      <h2 class="view-title">Confirm Transaction</h2>
+      <div class="confirm-card">
+        <div class="confirm-row">
+          <span class="confirm-label">From</span>
+          <span class="confirm-value" id="confirmFrom">—</span>
+        </div>
+        <div class="confirm-row">
+          <span class="confirm-label">To</span>
+          <span class="confirm-value" id="confirmTo">—</span>
+        </div>
+        <div class="confirm-row">
+          <span class="confirm-label">Amount</span>
+          <span class="confirm-value confirm-amount" id="confirmAmount">—</span>
+        </div>
+        <div class="confirm-row">
+          <span class="confirm-label">Fee</span>
+          <span class="confirm-value" id="confirmGas">~0.001 RSTN</span>
+        </div>
+        <div class="confirm-divider"></div>
+        <div class="confirm-row">
+          <span class="confirm-label">Total</span>
+          <span class="confirm-value confirm-total" id="confirmTotal">—</span>
+        </div>
+      </div>
+      <div class="confirm-warning">
+        ⚠️ This transaction will be signed with Dilithium3 and broadcast to the network. It cannot be undone.
+      </div>
+      <button id="confirmSendBtn" class="btn btn-primary btn-block">Sign & Send</button>
+      <button id="confirmBackBtn" class="btn btn-ghost btn-block">Cancel</button>
+      <p class="error" id="confirmError"></p>
+    </section>
+
+    <!-- View: Backup (seed phrase reveal) -->
+    <section id="backupView" class="view hidden">
+      <h2 class="view-title">Backup Phrase</h2>
+      <p class="view-subtitle">These 24 words restore full access to this account. Write them down offline and never share them.</p>
+      <div class="seed-grid" id="seedGrid"></div>
+      <div class="confirm-warning">⚠️ Anyone with these words can steal your funds. Never type them into a website or send them to anyone.</div>
+      <button id="copySeedBtn" class="btn btn-secondary btn-block">Copy Phrase</button>
+      <button id="backupBackBtn" class="btn btn-ghost btn-block">Back</button>
+    </section>
+
+    <!-- View: Settings -->
+    <section id="settingsView" class="view hidden">
+      <h2 class="view-title">Settings</h2>
+
+      <div class="settings-section">
+        <span class="settings-label">Security</span>
+        <button id="revealSeedBtn" class="btn btn-secondary btn-block">Reveal Backup Phrase</button>
+        <button id="changePasswordBtn" class="btn btn-secondary btn-block">Change Password</button>
+      </div>
+
+      <div class="settings-section">
+        <span class="settings-label">Network</span>
+        <div class="network-presets" id="networkPresets" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary network-preset" data-rpc="http://localhost:9944" style="flex:1;min-width:120px;">Local Testnet</button>
+          <button type="button" class="btn btn-secondary network-preset" data-rpc="https://rpc.rstn.network" style="flex:1;min-width:120px;">Public Testnet</button>
+        </div>
+        <input type="text" id="rpcUrlInput" class="input" placeholder="RPC URL" />
+        <button id="saveNetworkBtn" class="btn btn-secondary btn-block">Save Network</button>
+      </div>
+
+      <div class="settings-section">
+        <span class="settings-label">Danger Zone</span>
+        <button id="resetWalletBtn" class="btn btn-danger btn-block">Reset Wallet (erase all data)</button>
+      </div>
+
+      <button id="settingsBackBtn" class="btn btn-ghost btn-block">Back</button>
+    </section>
+
+    <!-- View: Change Password -->
+    <section id="changePwView" class="view hidden">
+      <h2 class="view-title">Change Password</h2>
+      <input type="password" id="oldPassword" class="input" placeholder="Current password" autocomplete="current-password" />
+      <input type="password" id="newPassword" class="input" placeholder="New password (min 8 chars)" autocomplete="new-password" />
+      <input type="password" id="confirmNewPassword" class="input" placeholder="Confirm new password" autocomplete="new-password" />
+      <button id="changePwConfirmBtn" class="btn btn-primary btn-block">Update Password</button>
+      <button id="changePwBackBtn" class="btn btn-ghost btn-block">Cancel</button>
+      <p class="error" id="changePwError"></p>
+    </section>
+
+    <!-- View: Account switcher dropdown -->
+    <div class="account-dropdown hidden" id="accountDropdown">
+      <div class="account-dropdown-header">
+        <span>Accounts</span>
+        <button class="icon-btn" id="addAccountBtn" title="Add account">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div id="accountList" class="account-list"></div>
+    </div>
+  </div>
+
+  <script src="qr.js"></script>
+  <script src="popup-qr.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RSTN Wallet — Confirm</title>
+  <link rel="stylesheet" href="popup.css" />
+  <style>
+    .confirm-wrap { padding: 16px; }
+    .confirm-origin {
+      font-size: 11px; color: var(--text-muted); margin-bottom: 4px;
+      word-break: break-all;
+    }
+    .confirm-origin strong { color: var(--primary); }
+    .confirm-title { font-size: 16px; font-weight: 700; margin: 4px 0 12px; }
+    .detail-line { font-size: 13px; color: var(--text); margin: 0 0 8px; line-height: 1.45; }
+    .detail-pre {
+      font-family: monospace; font-size: 12px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+      white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow-y: auto;
+      margin: 8px 0;
+    }
+    .detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin-bottom: 10px; }
+    .detail-label { font-size: 12px; color: var(--text-muted); }
+    .detail-val { font-size: 13px; color: var(--text); word-break: break-all; }
+    .detail-val.mono { font-family: monospace; font-size: 12px; }
+    .detail-warn {
+      font-size: 11px; color: var(--text-muted); margin: 10px 0 0;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg-card);
+    }
+    .confirm-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .confirm-actions .btn { flex: 1; }
+    .error { color: #ef4444; font-size: 12px; margin-top: 8px; min-height: 16px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="logo">
+        <svg class="logo-svg" viewBox="0 0 100 100" width="24" height="24" fill="none">
+          <defs>
+            <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00E673"/>
+              <stop offset="100%" stop-color="#12A55C"/>
+            </linearGradient>
+          </defs>
+          <path d="M 26 20 L 26 80 L 46 52" stroke="url(#logo-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M 54 48 L 74 20 L 74 80" stroke="url(#logo-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <span class="logo-text">RSTN</span>
+      </div>
+    </header>
+    <div class="confirm-wrap">
+      <div class="confirm-origin">Request from <strong id="origin">—</strong></div>
+      <h2 class="confirm-title" id="confirmTitle">Confirm</h2>
+      <div id="confirmDetail"></div>
+      <div class="confirm-actions">
+        <button id="rejectBtn" class="btn btn-ghost">Reject</button>
+        <button id="approveBtn" class="btn btn-primary">Approve</button>
+      </div>
+      <p class="error" id="confirmError"></p>
+    </div>
+  </div>
+  <script src="confirm.js"></script>
+</body>
+</html>

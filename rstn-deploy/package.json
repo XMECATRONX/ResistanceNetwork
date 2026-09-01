@@ -1,0 +1,19 @@
+{
+  "name": "rstn-deploy",
+  "version": "1.0.0",
+  "description": "Native post-quantum smart contract deployment CLI for Resistance Network (Dilithium3 / FIPS 204)",
+  "type": "module",
+  "bin": {
+    "rstn-deploy": "./cli.js"
+  },
+  "scripts": {
+    "start": "node cli.js"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "^0.7.0",
+    "@noble/hashes": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

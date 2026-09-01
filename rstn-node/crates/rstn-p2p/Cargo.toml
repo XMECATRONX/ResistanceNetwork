@@ -1,0 +1,20 @@
+[package]
+name = "rstn-p2p"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+libp2p.workspace = true
+tokio.workspace = true
+serde.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+rstn-core.workspace = true
+# A1: needed for the PQ hybrid session handshake (Kyber768 + X25519 + Dilithium3).
+rstn-crypto.workspace = true
+# A1: needed for PQ broadcast encryption nonce generation.
+rand.workspace = true
+serde-big-array = "0.5"
+# A1 (fork): async transport upgrade needs futures traits (AsyncRead/Write).
+futures = "0.3"

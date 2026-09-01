@@ -1,0 +1,19 @@
+[package]
+name = "rstn-bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Decentralized lock-and-mint bridge -- protocol-pure, no central operator"
+
+[dependencies]
+rstn-core = { path = "../rstn-core" }
+rstn-crypto = { path = "../rstn-crypto" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde-big-array = "0.5"
+thiserror = { workspace = true }
+sha3 = { workspace = true }
+sha2 = { version = "0.10", default-features = false }
+hex = { workspace = true }
+tracing = { workspace = true }

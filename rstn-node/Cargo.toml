@@ -1,0 +1,78 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rstn-core",
+    "crates/rstn-crypto",
+    "crates/rstn-p2p",
+    "crates/rstn-vm",
+    "crates/rstn-rpc",
+    "crates/rstn-storage",
+    "crates/rstn-bridge",
+    "crates/rstn-node",
+    "crates/rstn-sol-transpiler",
+    "crates/rstn-ledger",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Resistance Network"]
+description = "Resistance Network (RSTN) -- Post-Quantum Layer 1 Blockchain Node"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+# Crypto
+sha3 = "0.10"
+zeroize = { version = "1.8", features = ["derive"] }
+# Post-quantum signatures (NIST FIPS 204 -- ML-DSA-65 / Dilithium3 standard)
+# fips204 implements the FINAL FIPS 204 standard (ML-DSA-65): pk=1952, sk=4032,
+# sig=3309 -- identical wire format to @noble/post-quantum used by the wallet,
+# so signatures produced by the wallet verify on-chain and vice versa.
+fips204 = "0.4"
+# Post-quantum SPHINCS+ / SLH-DSA signatures (NIST FIPS 205 standard, signature 3.0 compatible)
+slh-dsa = "0.2.0-rc.5"
+# Post-quantum KEM (NIST FIPS 203 -- Kyber768 / ML-KEM-768)
+pqc_kyber = "0.7"
+# Classical ECDH & Ed25519 for hybrid crypto (3.x: signature 3.0 compatible)
+x25519-dalek = { version = "2.0", features = ["static_secrets", "zeroize"] }
+ed25519-dalek = { version = "3.0", features = ["zeroize"] }
+# HKDF for proper key derivation
+hkdf = "0.12"
+rand_core = { version = "0.6", features = ["getrandom", "std"] }
+# Random number generation (PQ broadcast nonces, key generation entropy)
+rand = "0.8"
+# Big array serde support (Dilithium3 pubkeys/signatures are 1952/3309 bytes)
+serde-big-array = "0.5"
+# P2P
+libp2p = { version = "0.54", features = ["gossipsub", "kad", "noise", "tcp", "tokio", "macros", "identify", "yamux", "dns"] }
+# Storage
+sled = "0.34"
+hex = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+# Internal crates
+rstn-core = { path = "crates/rstn-core" }
+rstn-crypto = { path = "crates/rstn-crypto" }
+rstn-p2p = { path = "crates/rstn-p2p" }
+rstn-vm = { path = "crates/rstn-vm" }
+rstn-rpc = { path = "crates/rstn-rpc" }
+rstn-storage = { path = "crates/rstn-storage" }
+rstn-bridge = { path = "crates/rstn-bridge" }
+rstn-node = { path = "crates/rstn-node" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

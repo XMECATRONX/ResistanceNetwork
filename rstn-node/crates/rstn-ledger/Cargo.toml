@@ -1,0 +1,17 @@
+[package]
+name = "rstn-ledger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Ledger hardware wallet integration for Dilithium3 (FIPS 204) post-quantum signing"
+
+[dependencies]
+rstn-crypto = { path = "../rstn-crypto" }
+thiserror = { workspace = true }
+hex = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

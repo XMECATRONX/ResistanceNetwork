@@ -1,0 +1,31 @@
+[package]
+name = "rstn-ledger-app"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Resistance Network"]
+description = "RSTN Ledger BOLOS app — on-device Dilithium3 (FIPS 204) signing for the quantum refuge"
+
+# This crate is the on-device firmware scaffold. It is NOT part of the node
+# workspace build (which targets x86_64); it targets the Ledger secure element
+# (ARM Cortex-M / ST33) and is compiled with the Ledger BOLOS SDK + cargo-ledger.
+# It is included in the repo as the firmware source of truth.
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Post-quantum signatures (NIST FIPS 204 -- ML-DSA-65 / Dilithium3 standard).
+# Same wire format as the node + wallet (pk=1952, sk=4032, sig=3309).
+fips204 = "0.4"
+# Keccak-512 for address derivation (matches node derive_address).
+sha3 = "0.10"
+# no_std-friendly error handling.
+# (Ledger apps are no_std; we avoid std-only crates in the firmware path.)
+
+[features]
+default = []
+# Compile-time switch for the hybrid-attestation signing path (host-assisted
+# lattice signing). When disabled, the SE attempts full in-SE signing (slow
+# on current ST33 hardware; see LEDGER_BOLOS_FIRMWARE.md §2).
+hybrid-attestation = []

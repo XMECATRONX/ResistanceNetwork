@@ -1,0 +1,64 @@
+{
+  "name": "Resistance Network",
+  "symbol": "RSTN",
+  "decimals": 18,
+  "logo": "https://quantum-resistem-pro.vibepreview.com/favicon.svg",
+  "website": "https://quantum-resistem-pro.vibepreview.com",
+  "whitepaper": "https://quantum-resistem-pro.vibepreview.com/#tokenomics",
+  "github": "To be announced",
+  "twitter": "To be announced",
+  "telegram": "To be announced",
+  "discord": "To be announced",
+  "platform": {
+    "name": "Resistance Network (native Layer 1)",
+    "chain_id": "TBD",
+    "contract_address": "native (no contract — RSTN is the native gas token of the RSTN L1)"
+  },
+  "max_supply": 1000000000,
+  "total_supply": 1000000000,
+  "circulating_supply": 50000000,
+  "circulating_supply_note": "50M bootstrap seed (verified testnet node operators). The remaining 950M is a non-circulating reserve distributed only via Proof of Participation staking rewards with 4-year halving. No minting — all 1B tokens exist from genesis block 0.",
+  "price_usd": null,
+  "price_usd_note": "Null until first DEX swap. RSTN has no sale, no ICO, no sale price. Price is born from market discovery at the first RSTN/USDC pool swap (block 0 fair launch, Satoshi model). CoinGecko/CoinMarketCap should read price from the DEX pool reserves via VWAP, not from this field.",
+  "market_cap_usd": null,
+  "dex": {
+    "status": "pre_mainnet",
+    "pool_address": "TBD — deployed post-mainnet",
+    "pair": "RSTN/USDC",
+    "price_method": "VWAP of pool reserves, queried on-chain by aggregator"
+  },
+  "genesis": {
+    "block_zero_supply": 1000000000,
+    "minting": 0,
+    "team_allocation": 0,
+    "ecosystem_fund": 0,
+    "genesis_treasury": 0,
+    "ico": 0,
+    "pre_sale": 0,
+    "vc": 0,
+    "distribution": [
+      {
+        "bucket": "Proof of Participation (Staking & Validators)",
+        "amount": 950000000,
+        "percentage": 95,
+        "mechanism": "Earned by work. Staking rewards with 4-year halving. Team operates genesis validator and earns from this bucket (Satoshi model). Zero reserved team bucket."
+      },
+      {
+        "bucket": "Testnet Bootstrap Seed (Airdrop)",
+        "amount": 50000000,
+        "percentage": 5,
+        "mechanism": "Delivered once to verified testnet node operators. PoS equivalent of Satoshi's first miners. Not transferable to founders."
+      }
+    ]
+  },
+  "monetary_policy": {
+    "hard_cap": 1000000000,
+    "minting_rate": 0,
+    "gas_burn_rate_percent": 50,
+    "reserve_halving_years": 4,
+    "reserve_total": 950000000,
+    "reserve_convergence_years": 24
+  },
+  "updated_at": "2026-09-01T00:00:00Z",
+  "schema_version": "1.0.0"
+}

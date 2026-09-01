@@ -1,0 +1,124 @@
+# RSTN Testnet -- 4-Node Private Network
+#
+# Deploys 4 RSTN validator nodes in a private testnet.
+# Each node runs on a separate host port with a shared genesis.json.
+#
+# Prerequisites:
+#   1. Build the image:  docker build -t rstn-node:latest -f Dockerfile .
+#   2. Generate genesis: docker run --rm rstn-node:latest genesis \
+#        --validators 4 --chain-id 1337 --shard-count 4 --output /dev/stdout > genesis.json
+#   3. docker-compose up -d
+#   4. docker-compose logs -f rstn-node-1
+#
+# Each node MUST receive --genesis + --validator-index so it loads the shared
+# validator set and runs in multi-node BFT mode. Without --genesis a node falls
+# back to single-node dev mode (no P2P, no BFT) — that is NOT a testnet.
+
+version: "3.9"
+
+services:
+  rstn-node-1:
+    image: rstn-node:latest
+    container_name: rstn-node-1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9944:9944"  # RPC
+      - "9945:9945"  # P2P
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - node1-data:/data
+      - ./genesis.json:/genesis.json:ro
+    command: >
+      --testnet
+      --genesis /genesis.json
+      --validator-index 0
+      --port 9944
+      --p2p-port 9945
+      --data-dir /data
+    networks:
+      - rstn-net
+
+  rstn-node-2:
+    image: rstn-node:latest
+    container_name: rstn-node-2
+    ports:
+      - "9946:9944"
+      - "9947:9945"
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - node2-data:/data
+      - ./genesis.json:/genesis.json:ro
+    command: >
+      --testnet
+      --genesis /genesis.json
+      --validator-index 1
+      --port 9944
+      --p2p-port 9945
+      --data-dir /data
+      --peers /dns4/rstn-node-1/tcp/9945
+    depends_on:
+      - rstn-node-1
+    networks:
+      - rstn-net
+
+  rstn-node-3:
+    image: rstn-node:latest
+    container_name: rstn-node-3
+    ports:
+      - "9948:9944"
+      - "9949:9945"
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - node3-data:/data
+      - ./genesis.json:/genesis.json:ro
+    command: >
+      --testnet
+      --genesis /genesis.json
+      --validator-index 2
+      --port 9944
+      --p2p-port 9945
+      --data-dir /data
+      --peers /dns4/rstn-node-1/tcp/9945,/dns4/rstn-node-2/tcp/9945
+    depends_on:
+      - rstn-node-2
+    networks:
+      - rstn-net
+
+  rstn-node-4:
+    image: rstn-node:latest
+    container_name: rstn-node-4
+    ports:
+      - "9950:9944"
+      - "9951:9945"
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - node4-data:/data
+      - ./genesis.json:/genesis.json:ro
+    command: >
+      --testnet
+      --genesis /genesis.json
+      --validator-index 3
+      --port 9944
+      --p2p-port 9945
+      --data-dir /data
+      --peers /dns4/rstn-node-1/tcp/9945,/dns4/rstn-node-2/tcp/9945
+    depends_on:
+      - rstn-node-3
+    networks:
+      - rstn-net
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+  node4-data:
+
+networks:
+  rstn-net:
+    driver: bridge

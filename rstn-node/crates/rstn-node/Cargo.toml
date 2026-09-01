@@ -1,0 +1,28 @@
+[package]
+name = "rstn-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rstn-node"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+rstn-core.workspace = true
+rstn-crypto.workspace = true
+rstn-p2p.workspace = true
+rstn-vm.workspace = true
+rstn-rpc.workspace = true
+rstn-storage.workspace = true
+rstn-bridge.workspace = true
+hex.workspace = true
+libp2p.workspace = true
+futures = "0.3"

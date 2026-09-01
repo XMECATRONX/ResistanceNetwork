@@ -1,0 +1,16 @@
+[package]
+name = "rstn-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sled.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-big-array = "0.5"
+thiserror.workspace = true
+tracing.workspace = true
+sha3.workspace = true
+rstn-core.workspace = true
+rstn-crypto.workspace = true

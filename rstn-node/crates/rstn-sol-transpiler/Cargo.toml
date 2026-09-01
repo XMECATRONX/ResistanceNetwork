@@ -1,0 +1,15 @@
+[package]
+name = "rstn-sol-transpiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Solidity/EVM bytecode transpiler → RSTN-VM bytecode (reduces developer onboarding friction)"
+
+[dependencies]
+rstn-vm = { path = "../rstn-vm" }
+thiserror = { workspace = true }
+hex = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]

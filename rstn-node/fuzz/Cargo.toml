@@ -1,0 +1,32 @@
+[package]
+name = "rstn-fuzz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rstn-crypto = { path = "../crates/rstn-crypto" }
+rstn-bridge = { path = "../crates/rstn-bridge" }
+rstn-vm = { path = "../crates/rstn-vm" }
+rstn-core = { path = "../crates/rstn-core" }
+
+[[bin]]
+name = "protocol"
+path = "fuzz_targets/protocol.rs"
+
+[[bin]]
+name = "vm"
+path = "fuzz_targets/vm.rs"
+
+[[bin]]
+name = "consensus"
+path = "fuzz_targets/consensus.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
