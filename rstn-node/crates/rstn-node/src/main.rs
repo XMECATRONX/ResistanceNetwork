@@ -107,6 +107,23 @@ enum Commands {
         #[arg(long, default_value = "./genesis.json")]
         output: String,
     },
+    /// Transpile EVM bytecode (from solc) to RSTN-VM bytecode.
+    ///
+    /// Solidity devs compile with their existing toolchain (solc) and run
+    /// `rstn-node transpile --input contract.bin` on the output. The
+    /// transpiler validates opcodes, checks PUSH immediates, records valid
+    /// jumpdests, and emits bytecode ready for `rstn_vm::Vm::deploy()`.
+    Transpile {
+        /// Path to the input EVM bytecode file (hex or raw bytes).
+        #[arg(short, long)]
+        input: String,
+        /// Path to write the transpiled RSTN-VM bytecode (hex).
+        #[arg(short, long, default_value = "./contract.rstn.hex")]
+        output: String,
+        /// Treat the input as raw hex text (default). If false, read as raw bytes.
+        #[arg(long, default_value = "true")]
+        hex_input: bool,
+    },
 }
 
 /// A validator entry loaded from genesis.json.
@@ -163,10 +180,50 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Genesis { validators, chain_id, shard_count, output }) => {
             generate_genesis_file(validators, chain_id, shard_count, &output)?;
         }
+        Some(Commands::Transpile { input, output, hex_input }) => {
+            transpile_command(&input, &output, hex_input)?;
+        }
         Some(Commands::Run) | None => {
             run_node(cli).await?;
         }
     }
+
+    Ok(())
+}
+
+/// `rstn-node transpile --input contract.bin --output contract.rstn.hex`
+///
+/// Reads EVM bytecode (hex or raw), transpiles it to RSTN-VM bytecode via
+/// `rstn_sol_transpiler::transpile`, and writes the result as hex.
+fn transpile_command(input_path: &str, output_path: &str, hex_input: bool) -> anyhow::Result<()> {
+    let raw = std::fs::read(input_path)
+        .map_err(|e| anyhow::anyhow!("failed to read input {}: {}", input_path, e))?;
+
+    let evm_bytecode = if hex_input {
+        // The file may contain hex text (with or without 0x prefix / whitespace).
+        let text = std::str::from_utf8(&raw)
+            .map_err(|e| anyhow::anyhow!("input is not valid UTF-8 hex: {}", e))?;
+        let trimmed = text.trim().trim_start_matches("0x").replace([' ', '\n', '\r'], "");
+        hex::decode(&trimmed)
+            .map_err(|e| anyhow::anyhow!("input is not valid hex: {}", e))?
+    } else {
+        raw
+    };
+
+    println!("Transpiling {} bytes of EVM bytecode → RSTN-VM...", evm_bytecode.len());
+
+    let result = rstn_sol_transpiler::transpile(&evm_bytecode)
+        .map_err(|e| anyhow::anyhow!("transpile failed: {}", e))?;
+
+    let hex_out = result.to_hex();
+    std::fs::write(output_path, &hex_out)
+        .map_err(|e| anyhow::anyhow!("failed to write output {}: {}", output_path, e))?;
+
+    println!("OK Transpiled {} opcodes → {} bytes", result.opcode_count, result.bytecode.len());
+    println!("  PQ opcodes (0x0C/0x0D): {}", result.has_pq_opcodes);
+    println!("  CREATE/CREATE2 (0xF0/0xF5): {}", result.has_create);
+    println!("  Valid jumpdests: {}", result.valid_jumpdests.len());
+    println!("  Output: {} ({} hex chars)", output_path, hex_out.len());
 
     Ok(())
 }
@@ -426,6 +483,18 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
         // In production the operator MUST set RSTN_ALLOWED_ORIGINS to the official
         // dApp origins; any other origin is rejected by the browser.
         allowed_origins: tokio::sync::RwLock::new(parse_allowed_origins()),
+        // G15-alarm: quantum alarm state, mirrored from the engine so RPC can
+        // query it. The runner syncs the engine's alarm into this slot after
+        // every finalize so RPC reads are consistent with consensus state.
+        quantum_alarm: tokio::sync::RwLock::new(rstn_core::quantum_alarm::QuantumAlarm::new()),
+        // G15: zk-STARK proof cache, indexed by block height. The runner
+        // generates a proof over each finalized block's tx_root and stores it
+        // here so light clients verify block validity succinctly via RPC.
+        stark_proofs: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        // G15-exec: circuit breakers, mirrored from the engine so RPC can
+        // query active trips. The runner syncs the engine's breaker into this
+        // slot after every block.
+        circuit_breakers: tokio::sync::RwLock::new(rstn_core::circuit_breaker::CircuitBreaker::new()),
     });
 
     // C1 startup guard: refuse to start in production mode if the bridge

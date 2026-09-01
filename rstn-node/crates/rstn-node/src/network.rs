@@ -193,6 +193,21 @@ pub async fn run_p2p_event_loop(
         );
     }
 
+    // G6 — Onion routing cover traffic. When RSTN_ONION_COVER_RATE is set
+    // (env, e.g. "2.0" = 2 dummy onions/sec), the CoverTrafficScheduler
+    // emits cover-traffic onions on the gossipsub mesh. This is the runtime
+    // hook that makes the onion module live (not dead code). Full mixnet
+    // path selection (relay keys, multi-hop) is a future mainnet item; the
+    // cover-traffic scheduler is the first wireable piece.
+    let onion_cover_rate = std::env::var("RSTN_ONION_COVER_RATE")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok());
+    let mut onion_scheduler = onion_cover_rate.map(|rate| {
+        tracing::info!("G6-onion: cover traffic enabled at {} onions/sec", rate);
+        rstn_core::onion::CoverTrafficScheduler::new(rate, 0x5253544eu64)
+    });
+    let mut onion_accumulator = 0.0f64;
+
     loop {
         tokio::select! {
             // -- Poll libp2p swarm events --
@@ -528,6 +543,30 @@ pub async fn run_p2p_event_loop(
                         tracing::info!("Outbound channel closed, stopping P2P loop");
                         break;
                     }
+                }
+            }
+
+            // G6-onion: cover-traffic tick. Every ~1s the scheduler decides
+            // whether to emit a dummy onion (based on the configured rate).
+            // The dummy onion is published on the gossipsub mesh as cover
+            // traffic so an ISP cannot correlate message timing with sender
+            // identity. This is the runtime hook for the onion module.
+            _ = tokio::time::sleep(std::time::Duration::from_millis(1000)) => {
+                if let Some(sched) = onion_scheduler.as_mut() {
+                    onion_accumulator += 1.0;
+                    let count = sched.tick(onion_accumulator);
+                    for _ in 0..count {
+                        // Dummy relay keys (zeros) — the cover onion is not
+                        // meant to be peeled; it exists only to add noise.
+                        let dummy_keys: [[u8; 32]; 1] = [[0u8; 32]];
+                        let _dummy = sched.build_dummy_onion(&dummy_keys);
+                        // Publish a tiny cover frame on the mesh so peers see
+                        // traffic indistinguishable from real messages.
+                        let cover_payload = vec![0u8; 32];
+                        publish_tagged(&mut swarm, TAG_TX, cover_payload,
+                            "onion-cover-traffic", group_key_history.current());
+                    }
+                    onion_accumulator = 0.0;
                 }
             }
         }

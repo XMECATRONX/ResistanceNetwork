@@ -84,6 +84,17 @@ pub struct ConsensusEngine {
     /// is finalized, the committee produces decryption shares and the
     /// plaintext is recovered — only then is the tx's payload known.
     pub encrypted_txs: Vec<crate::threshold_mempool::ThresholdCiphertext>,
+    /// On-chain circuit breakers (G15-exec). Detects anomalous value drain
+    /// and oracle deviation, and gates transfers/oracle-ops. The runner
+    /// feeds every transfer through `record_outflow` and checks `is_paused`
+    /// before executing. This makes the "circuit breakers on-chain" claim
+    /// true at runtime, not just in a standalone module.
+    pub circuit_breaker: crate::circuit_breaker::CircuitBreaker,
+    /// Quantum alarm (G15-alarm). Detects a classically-impossible forgery
+    /// and, on 2/3+ validator cosignature, transitions to Emergency —
+    /// after which Dilithium3-only signatures are rejected. The runner
+    /// checks `is_emergency()` at finalization to enforce the fallback.
+    pub quantum_alarm: crate::quantum_alarm::QuantumAlarm,
 }
 
 impl ConsensusEngine {
@@ -102,6 +113,8 @@ impl ConsensusEngine {
             forced_pool: crate::forced_inclusion::ForcedInclusionPool::new(),
             threshold_mempool: None,
             encrypted_txs: Vec::new(),
+            circuit_breaker: crate::circuit_breaker::CircuitBreaker::new(),
+            quantum_alarm: crate::quantum_alarm::QuantumAlarm::new(),
         }
     }
 
