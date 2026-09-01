@@ -24,6 +24,7 @@ use crate::{
     Dilithium3Signature, verify_signature, CryptoError, ADDRESS_SIZE,
 };
 use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 /// An abstract account's validation scheme.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -64,6 +65,7 @@ pub struct AbstractAccount {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidationPayload {
     /// The transaction hash being authorized.
+    #[serde(with = "BigArray")]
     pub tx_hash: [u8; 64],
     /// Signatures (interpretation depends on the scheme).
     pub signatures: Vec<Dilithium3Signature>,

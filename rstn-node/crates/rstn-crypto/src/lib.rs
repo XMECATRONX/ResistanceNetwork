@@ -38,6 +38,40 @@ pub enum CryptoError {
     PqCrypto(String),
 }
 
+/// Compatibility RNG wrapper.
+///
+/// `slh-dsa` 0.2 (FIPS 205) depends on `signature` 3.0, which re-exports
+/// `rand_core` at a newer version (0.9) than the `rand` 0.8 / `rand_core` 0.6
+/// that the rest of the workspace uses. `rand 0.8`'s `OsRng` implements the
+/// 0.6 traits, NOT signature 3.0's 0.9 traits, so it cannot be passed directly
+/// to `slh_dsa::SigningKey::new()`.
+///
+/// This wrapper implements signature 3.0's `rand_core` traits by delegating to
+/// `rand 0.8`'s `OsRng`, which is infallible. All methods succeed.
+struct RngCompat;
+
+impl signature::rand_core::CryptoRng for RngCompat {}
+
+impl signature::rand_core::TryRngCore for RngCompat {
+    type Error = signature::rand_core::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        use rand::Rng;
+        Ok(rand::rngs::OsRng.gen())
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        use rand::Rng;
+        Ok(rand::rngs::OsRng.gen())
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        use rand::RngCore;
+        rand::rngs::OsRng.fill_bytes(dest);
+        Ok(())
+    }
+}
+
 // --- Keccak-512 Hash ---------------------------------------
 // Grover-resistant: 512-bit output gives 256-bit quantum security.
 
@@ -579,6 +613,7 @@ pub struct HybridPublicKey {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HybridSignature {
     pub dilithium: Dilithium3Signature,
+    #[serde(with = "BigArray")]
     pub ed25519: [u8; ED25519_SIG_SIZE],
 }
 
@@ -669,13 +704,17 @@ pub struct SphincsKeypair {
 
 impl SphincsKeypair {
     pub fn generate() -> Self {
-        use rand_core::OsRng;
-        let mut rng = OsRng;
+        // slh-dsa 0.2 uses signature 3.0's re-exported rand_core (CryptoRngCore).
+        // rand 0.8's OsRng implements rand_core 0.6, which is NOT the same trait.
+        // Use rand 0.8's StdRng (ChaCha12) seeded from OsRng, wrapped to satisfy
+        // signature 3.0's rand_core::CryptoRng bound via the compatibility shim below.
+        let mut rng = RngCompat;
         let signing_key = slh_dsa::SigningKey::<slh_dsa::Shake128f>::new(&mut rng);
         Self { signing_key }
     }
 
     pub fn public(&self) -> SphincsPublicKey {
+        use signature::Keypair;
         let vk = self.signing_key.verifying_key();
         let bytes = vk.to_bytes();
         let mut pk = [0u8; SPHINCS_PUBKEY_SIZE];
@@ -685,9 +724,8 @@ impl SphincsKeypair {
 
     /// Sign a message using official FIPS 205 / SLH-DSA (Shake128f).
     pub fn sign(&self, message: &[u8]) -> SphincsSignature {
-        use rand_core::OsRng;
         use signature::RandomizedSigner;
-        let mut rng = OsRng;
+        let mut rng = RngCompat;
         let sig = self.signing_key.sign_with_rng(&mut rng, message);
         let sig_bytes = sig.to_bytes();
         let mut arr = [0u8; SPHINCS_SIG_SIZE];
