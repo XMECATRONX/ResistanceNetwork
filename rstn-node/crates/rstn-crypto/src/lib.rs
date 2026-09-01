@@ -708,10 +708,12 @@ impl signature::rand_core::TryRng for SphincsOsRng {
     }
 }
 
-// Marker traits: safe to implement since the underlying entropy source
+// Marker trait: safe to implement since the underlying entropy source
 // (the OS CSPRNG via rand_core 0.6's `OsRng`) is cryptographically secure.
+// NOTE: do NOT manually impl `CryptoRng` — rand_core 0.10 has a blanket
+// `impl<R: TryCryptoRng<Error = Infallible>> CryptoRng for R`, so a manual
+// one would conflict (E0119). `TryCryptoRng` alone is sufficient.
 impl signature::rand_core::TryCryptoRng for SphincsOsRng {}
-impl signature::rand_core::CryptoRng for SphincsOsRng {}
 
 impl SphincsKeypair {
     pub fn generate() -> Self {
