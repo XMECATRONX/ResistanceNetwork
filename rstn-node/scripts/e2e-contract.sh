@@ -60,11 +60,16 @@ fi
 echo ""
 echo "[3/4] Deploying contract (ContractDeploy tx)..."
 # For ContractDeploy, 'to' is empty (contracts have no recipient).
-# The node handler accepts an empty 'to' for ContractDeploy and uses a zero address.
+# The init bytecode goes in 'payload' so the node's CREATE handler executes it
+# and stores the returned runtime code at the deterministic contract address.
 DEPLOY=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":0,"method":"rstn_debugSendTx","params":[{"to":"","value":"0","tx_type":"ContractDeploy"}]}')
+  -d "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"rstn_debugSendTx\",\"params\":[{\"to\":\"\",\"value\":\"0\",\"tx_type\":\"ContractDeploy\",\"payload\":\"$EVM_BYTECODE\"}]}")
 echo "  -> $DEPLOY"
-echo "$DEPLOY" | grep -q '"error"' && echo "  [WARN] Deploy returned error (transpile still validated)"
+if echo "$DEPLOY" | grep -q '"error"'; then
+  echo "[FAIL] Deploy returned error — contract deploy not accepted by node"
+  exit 1
+fi
+echo "  -> deploy accepted"
 
 # --- 4. Verify contract storage via eth_getStorageAt ----------------------
 echo ""

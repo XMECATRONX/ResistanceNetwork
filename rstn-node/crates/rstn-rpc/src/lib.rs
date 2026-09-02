@@ -989,6 +989,16 @@ async fn debug_send_tx(state: &RpcState, params: Option<&Value>) -> Result<Value
         _ => TxType::Transfer,
     };
 
+    // Optional payload (hex "0x...") — used for ContractDeploy (init bytecode)
+    // and Contract (calldata). Defaults to empty for simple transfers.
+    let payload_bytes = p.get("payload")
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            let h = s.strip_prefix("0x").unwrap_or(s);
+            hex::decode(h).unwrap_or_default()
+        })
+        .unwrap_or_default();
+
     // Build the unsigned transaction, sign it with Dilithium3.
     let from_addr = derive_address(&keypair.public);
     // Query the current on-chain nonce for the sender so the tx is not
@@ -1002,7 +1012,7 @@ async fn debug_send_tx(state: &RpcState, params: Option<&Value>) -> Result<Value
         gas_price: 1,
         gas_limit: 21000,
         tx_type,
-        payload: Vec::new(),
+        payload: payload_bytes,
         signature: Dilithium3Signature([0u8; rstn_crypto::SIG_SIZE]),
         hybrid_signature: None,
         hybrid_pubkey: None,
