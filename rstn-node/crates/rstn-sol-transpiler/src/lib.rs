@@ -37,7 +37,7 @@
 //! - Opcodes RSTN-VM does not implement. The transpiler reports the first
 //!   unsupported opcode and its offset so the dev can fix it.
 
-use rstn_vm::opcodes;
+use rstn_vm::*;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -97,7 +97,7 @@ pub fn transpile(evm_bytecode: &[u8]) -> Result<TranspiledContract, TranspileErr
         let op = evm_bytecode[i];
 
         // PUSH0 (0x5F) — no immediate.
-        if op == opcodes::OP_PUSH0 {
+        if op == OP_PUSH0 {
             opcode_count += 1;
             out.push(op);
             i += 1;
@@ -122,7 +122,7 @@ pub fn transpile(evm_bytecode: &[u8]) -> Result<TranspiledContract, TranspileErr
         }
 
         // RSTN PQ opcodes (0x0C, 0x0D) — kept, flagged.
-        if op == opcodes::OP_VALID_SIG || op == opcodes::OP_CROSS_SHARD_SEND {
+        if op == OP_VALID_SIG || op == OP_CROSS_SHARD_SEND {
             has_pq_opcodes = true;
             opcode_count += 1;
             out.push(op);
@@ -131,7 +131,7 @@ pub fn transpile(evm_bytecode: &[u8]) -> Result<TranspiledContract, TranspileErr
         }
 
         // CREATE / CREATE2 (0xF0 / 0xF5) — Solidity compatibility, kept.
-        if op == opcodes::OP_CREATE || op == opcodes::OP_CREATE2 {
+        if op == OP_CREATE || op == OP_CREATE2 {
             has_create = true;
             opcode_count += 1;
             out.push(op);
@@ -140,7 +140,7 @@ pub fn transpile(evm_bytecode: &[u8]) -> Result<TranspiledContract, TranspileErr
         }
 
         // JUMPDEST (0x5D) — record valid jump target.
-        if op == opcodes::OP_JUMPDEST {
+        if op == OP_JUMPDEST {
             valid_jumpdests.push(out.len());
             opcode_count += 1;
             out.push(op);
@@ -184,28 +184,29 @@ pub fn transpile(evm_bytecode: &[u8]) -> Result<TranspiledContract, TranspileErr
 /// that exist in `rstn_vm::opcodes` plus the contiguous ranges (DUP1-16,
 /// SWAP1-16, PUSH1-32, LOG0-4) that the EVM defines as ranges.
 fn is_supported_opcode(op: u8) -> bool {
-    use opcodes::*;
-    // Individual opcodes defined in the VM.
+    use rstn_vm as v;
+    // Individual opcodes defined in the VM. Qualified paths are required so the
+    // pattern matches the *constants*, not fresh variable bindings.
     let single = matches!(
         op,
-        OP_STOP | OP_ADD | OP_MUL | OP_SUB | OP_DIV | OP_SDIV | OP_MOD | OP_SMOD
-        | OP_ADDMOD | OP_MULMOD | OP_EXP | OP_SIGNEXTEND
-        | OP_LT | OP_GT | OP_SLT | OP_SGT | OP_EQ | OP_ISZERO | OP_AND | OP_OR
-        | OP_XOR | OP_NOT | OP_BYTE | OP_SHL | OP_SHR | OP_SAR
-        | OP_SHA3
-        | OP_ADDRESS | OP_BALANCE | OP_ORIGIN | OP_CALLER | OP_CALLVALUE
-        | OP_CALLDATALOAD | OP_CALLDATASIZE | OP_CALLDATACOPY
-        | OP_CODESIZE | OP_CODECOPY | OP_GASPRICE
-        | OP_EXTCODESIZE | OP_EXTCODECOPY | OP_RETURNDATASIZE | OP_RETURNDATACOPY
-        | OP_EXTCODEHASH | OP_SELFBALANCE | OP_CHAINID | OP_BASEFEE
-        | OP_BLOCKHASH | OP_COINBASE | OP_TIMESTAMP | OP_NUMBER | OP_DIFFICULTY
-        | OP_GASLIMIT
-        | OP_POP | OP_MLOAD | OP_MSTORE | OP_MSTORE8 | OP_SLOAD | OP_SSTORE
-        | OP_JUMP | OP_JUMPI | OP_PC | OP_MSIZE | OP_GAS
-        | OP_JUMPDEST
-        | OP_PUSH0
-        | OP_RETURN | OP_REVERT | OP_INVALID | OP_SELFDESTRUCT
-        | OP_CALL | OP_CALLCODE | OP_DELEGATECALL | OP_STATICCALL
+        v::OP_STOP | v::OP_ADD | v::OP_MUL | v::OP_SUB | v::OP_DIV | v::OP_SDIV | v::OP_MOD | v::OP_SMOD
+        | v::OP_ADDMOD | v::OP_MULMOD | v::OP_EXP | v::OP_SIGNEXTEND
+        | v::OP_LT | v::OP_GT | v::OP_SLT | v::OP_SGT | v::OP_EQ | v::OP_ISZERO | v::OP_AND | v::OP_OR
+        | v::OP_XOR | v::OP_NOT | v::OP_BYTE | v::OP_SHL | v::OP_SHR | v::OP_SAR
+        | v::OP_SHA3
+        | v::OP_ADDRESS | v::OP_BALANCE | v::OP_ORIGIN | v::OP_CALLER | v::OP_CALLVALUE
+        | v::OP_CALLDATALOAD | v::OP_CALLDATASIZE | v::OP_CALLDATACOPY
+        | v::OP_CODESIZE | v::OP_CODECOPY | v::OP_GASPRICE
+        | v::OP_EXTCODESIZE | v::OP_EXTCODECOPY | v::OP_RETURNDATASIZE | v::OP_RETURNDATACOPY
+        | v::OP_EXTCODEHASH | v::OP_SELFBALANCE | v::OP_CHAINID | v::OP_BASEFEE
+        | v::OP_BLOCKHASH | v::OP_COINBASE | v::OP_TIMESTAMP | v::OP_NUMBER | v::OP_DIFFICULTY
+        | v::OP_GASLIMIT
+        | v::OP_POP | v::OP_MLOAD | v::OP_MSTORE | v::OP_MSTORE8 | v::OP_SLOAD | v::OP_SSTORE
+        | v::OP_JUMP | v::OP_JUMPI | v::OP_PC | v::OP_MSIZE | v::OP_GAS
+        | v::OP_JUMPDEST
+        | v::OP_PUSH0
+        | v::OP_RETURN | v::OP_REVERT | v::OP_INVALID | v::OP_SELFDESTRUCT
+        | v::OP_CALL | v::OP_CALLCODE | v::OP_DELEGATECALL | v::OP_STATICCALL
     );
     if single {
         return true;
@@ -246,7 +247,7 @@ mod tests {
     #[test]
     fn transpile_detects_pq_opcodes() {
         // 0x0C is VALID_SIG (RSTN PQ opcode) + STOP
-        let evm = vec![opcodes::OP_VALID_SIG, opcodes::OP_STOP];
+        let evm = vec![OP_VALID_SIG, OP_STOP];
         let result = transpile(&evm).expect("PQ opcode transpiles");
         assert!(result.has_pq_opcodes);
     }
@@ -269,7 +270,7 @@ mod tests {
     #[test]
     fn transpile_valid_jumpdests_recorded() {
         // JUMPDEST at offset 0
-        let evm = vec![opcodes::OP_JUMPDEST, opcodes::OP_STOP];
+        let evm = vec![OP_JUMPDEST, OP_STOP];
         let result = transpile(&evm).expect("jumpdest transpiles");
         assert!(result.valid_jumpdests.contains(&0));
     }
@@ -292,7 +293,7 @@ mod tests {
     #[test]
     fn transpile_log_range() {
         // LOG2 (0xA2) STOP — LOG range supported
-        let evm = vec![opcodes::OP_LOG2, opcodes::OP_STOP];
+        let evm = vec![OP_LOG2, OP_STOP];
         let result = transpile(&evm).expect("LOG2 transpiles");
         assert_eq!(result.bytecode, evm);
     }
