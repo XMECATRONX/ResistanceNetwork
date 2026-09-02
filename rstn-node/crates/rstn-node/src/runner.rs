@@ -1087,7 +1087,8 @@ pub async fn start_block_production(
                                 let tx_count = block.transactions.len();
 
                                 // -- Apply state transitions (shared function) --
-                                let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, engine.current_base_fee());
+                                let base_fee = engine.current_base_fee();
+                                let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
 
                                 // -- Recompute state_root AFTER applying txs --
                                 // The block header's state_root should reflect the post-tx state.
@@ -1247,7 +1248,8 @@ pub async fn start_block_production(
                             let height = block.header.height;
 
                             // Apply state transitions on the leader's DB now
-                            let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, engine.current_base_fee());
+                            let base_fee = engine.current_base_fee();
+                            let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
 
                             // Recompute state_root AFTER applying txs (post-tx)
                             let post_state_root = compute_state_root(&state.db);
@@ -1528,7 +1530,8 @@ pub async fn start_block_production(
                                                                     // Non-leaders apply the txs here for the first time so
                                                                     // their state matches the leader's post-tx state_root.
                                                                     if !pre_applied.contains(&height) {
-                                                                        let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, engine.current_base_fee());
+                                                                        let base_fee = engine.current_base_fee();
+                                                                        let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
 
                                                                         // -- Distribute block reward to validator --
                                                                         let validator_addr = rstn_crypto::derive_address(&block.header.validator);
@@ -1718,7 +1721,7 @@ fn detect_and_attest_censored_txs(
         .collect();
 
     // For each tx in our local mempool that was NOT included, attest it.
-    let censored: Vec<&rstn_core::Transaction> = engine
+    let censored: Vec<rstn_core::Transaction> = engine
         .mempool
         .iter()
         .filter(|tx| {
@@ -1727,6 +1730,7 @@ fn detect_and_attest_censored_txs(
             commit.copy_from_slice(&rstn_crypto::keccak512(&enc));
             !included.contains(&commit)
         })
+        .cloned()
         .collect();
 
     if censored.is_empty() {
@@ -1740,7 +1744,7 @@ fn detect_and_attest_censored_txs(
     );
 
     for tx in censored {
-        let payload = serde_json::to_vec(tx).unwrap_or_default();
+        let payload = serde_json::to_vec(&tx).unwrap_or_default();
         let tx_commitment = rstn_crypto::keccak512(&payload);
         let mut sign_buf = Vec::with_capacity(8 + 64);
         sign_buf.extend_from_slice(&block.header.height.to_le_bytes());
