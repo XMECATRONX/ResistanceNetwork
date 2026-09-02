@@ -33,6 +33,8 @@ use rstn_core::{Block, Transaction, Validator, ConsensusState, TxType};
 use rstn_storage::RstnDB;
 use rstn_crypto::{derive_address, format_address, Dilithium3Keypair, Dilithium3PublicKey, Dilithium3Signature};
 use rstn_bridge::{BridgeState, SourceChain as BridgeSourceChain};
+use rstn_bridge::spv::LockVerifier;
+use rstn_sol_transpiler::transpile as transpile_evm;
 
 #[derive(Debug, Error)]
 pub enum RpcError {
@@ -132,6 +134,19 @@ pub struct RpcState {
     /// rejected by the browser's same-origin policy. This prevents a
     /// malicious site from driving the user's local node (M4).
     pub allowed_origins: RwLock<Vec<String>>,
+    /// G15-alarm — Quantum alarm state. Mirrors the ConsensusEngine's
+    /// quantum_alarm so RPC can query the alarm state and validators can
+    /// file/cosign reports. The runner syncs this after every finalize.
+    pub quantum_alarm: tokio::sync::RwLock<rstn_core::quantum_alarm::QuantumAlarm>,
+    /// G15 — zk-STARK proofs indexed by block height. The runner generates a
+    /// STARK proof over each finalized block's tx_root and stores it here so
+    /// light clients can verify block validity with a succinct proof (no full
+    /// re-execution). This makes the "zk-STARKs nativos" claim run at runtime.
+    pub stark_proofs: tokio::sync::RwLock<std::collections::HashMap<u64, rstn_core::zk_stark::StarkProof>>,
+    /// G15-exec — Circuit breakers. Mirrors the ConsensusEngine's
+    /// circuit_breaker so RPC can query active trips (drain / oracle /
+    /// global). The runner syncs this after every block.
+    pub circuit_breakers: tokio::sync::RwLock<rstn_core::circuit_breaker::CircuitBreaker>,
 }
 
 /// RPC rate limit: max requests per IP per second.
@@ -302,6 +317,11 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         "rstn_getStorageAt" => get_storage_at(state, req.params.first()).await,
         "rstn_call" => call_contract(state, req.params.first()).await,
         "rstn_getContractAddress" => get_contract_address(state, req.params.first()).await,
+        // Transpile compiled EVM/Solidity bytecode → RSTN-VM bytecode.
+        // A dev compiles with solc, then calls this to validate the contract
+        // is deployable on RSTN-VM (unsupported opcodes rejected, jumpdests
+        // computed). Returns the RSTN-VM bytecode + metadata.
+        "rstn_transpile" => transpile_contract(req.params.first()).await,
 
         // -- EVM Compatibility (eth_*) for Hardhat/Foundry --
         "eth_chainId" => Ok(Value::String("0x539".into())),         // 1337
@@ -328,6 +348,22 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         "eth_mining" => Ok(Value::Bool(true)),
         "eth_getLogs" => eth_get_logs(state, req.params.first()).await,
         "eth_getBlockTransactionCountByNumber" => eth_block_tx_count_by_number(state, req.params.first()).await,
+
+        // -- Quantum Alarm (G15-alarm) ----------------------
+        // Query the on-chain quantum alarm state. Returns the current
+        // AlarmState (Normal/Pending/Emergency) + the emergency height if set.
+        "rstn_getQuantumAlarm" => get_quantum_alarm(state).await,
+
+        // -- zk-STARK Proofs (G15) --------------------------
+        // Returns the STARK proof for a finalized block (by height). Light
+        // clients verify block validity with a succinct proof instead of
+        // re-executing every transaction.
+        "rstn_getStarkProof" => get_stark_proof(state, req.params.first()).await,
+
+        // -- Circuit Breakers (G15-exec) -------------------
+        // Returns the active circuit-breaker trips (drain / oracle / global).
+        // Lets the dashboard show which addresses are paused and why.
+        "rstn_getCircuitBreakers" => get_circuit_breakers(state).await,
 
         // -- Unknown ---------------------------------------
         _ => Err(RpcError::MethodNotFound(req.method.clone())),
@@ -1744,6 +1780,8 @@ async fn bridge_submit_lock(state: &RpcState, params: Option<&Value>) -> Result<
                     locked_amount_wei,
                     user_rstn_address: user_rstn,
                     confirmations,
+                    trie_branch: Vec::new(), // light client supplies branch in production
+                    receipt_rlp: Vec::new(), // light client supplies receipt in production
                 };
                 proof.verify(chain, &source_txid_bytes, amount as u128, &user_addr, min_conf)
             }
@@ -2640,4 +2678,151 @@ async fn eth_get_logs(state: &RpcState, params: Option<&Value>) -> Result<Value,
     }).collect();
 
     Ok(Value::Array(result))
+}
+
+/// rstn_transpile -- transpile compiled EVM/Solidity bytecode to RSTN-VM bytecode.
+///
+/// Params: [{ "bytecode": "0x..." }]  or  ["0x..."]
+/// Returns: { "bytecode": "0x...", "opcodeCount": N, "hasPqOpcodes": bool,
+///            "hasCreate": bool, "validJumpdests": ["0x...", ...] }
+///
+/// This wires the `rstn-sol-transpiler` crate into the node's RPC surface so a
+/// Solidity developer can validate their contract is deployable on RSTN-VM
+/// without running a separate CLI tool. The transpiler scans the bytecode,
+/// rejects opcodes RSTN-VM does not implement, computes the valid jumpdest
+/// table, and flags PQ opcodes (0x0C/0x0D) and CREATE/CREATE2.
+async fn transpile_contract(params: Option<&Value>) -> Result<Value, RpcError> {
+    let arr = params_to_array(params)?;
+    let first = arr.get(0).ok_or_else(|| RpcError::InvalidParams("missing bytecode".into()))?;
+
+    // Accept either { "bytecode": "0x..." } or a bare "0x..." string.
+    let hex_str = if let Some(s) = first.as_str() {
+        s
+    } else if let Some(obj) = first.as_object() {
+        obj.get("bytecode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| RpcError::InvalidParams("missing 'bytecode' field".into()))?
+    } else {
+        return Err(RpcError::InvalidParams("bytecode must be a hex string".into()));
+    };
+
+    let clean = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+    let evm_bytes = hex::decode(clean)
+        .map_err(|e| RpcError::InvalidParams(format!("invalid hex bytecode: {}", e)))?;
+
+    let result = transpile_evm(&evm_bytes)
+        .map_err(|e| RpcError::InvalidParams(format!("transpile failed: {}", e)))?;
+
+    Ok(serde_json::json!({
+        "bytecode": format!("0x{}", result.to_hex()),
+        "opcodeCount": result.opcode_count,
+        "hasPqOpcodes": result.has_pq_opcodes,
+        "hasCreate": result.has_create,
+        "validJumpdests": result.valid_jumpdests.iter()
+            .map(|d| format!("0x{:x}", d))
+            .collect::<Vec<_>>(),
+    }))
+}
+
+// ===========================================================================
+// G15 — Quantum Alarm, zk-STARK proofs, Circuit Breakers
+// ===========================================================================
+
+/// `rstn_getQuantumAlarm` — Returns the current on-chain quantum alarm state.
+///
+/// The quantum alarm is a protocol-level monitor that watches for credible
+/// reports of a sufficiently large quantum computer. When triggered it flips
+/// the network into "Emergency" mode, which (a) freezes all ECDSA-based bridge
+/// inflows and (b) opens the Quantum Migration window so users can move
+/// vulnerable assets into Dilithium3 addresses.
+///
+/// Returns: { "status": "Normal"|"Pending"|"Emergency", "emergencyHeight": u64|null }
+async fn get_quantum_alarm(state: &RpcState) -> Result<Value, RpcError> {
+    let alarm = state.quantum_alarm.read().await;
+    let status_str = match alarm.state {
+        rstn_core::quantum_alarm::AlarmState::Normal => "Normal",
+        rstn_core::quantum_alarm::AlarmState::Pending => "Pending",
+        rstn_core::quantum_alarm::AlarmState::Emergency => "Emergency",
+    };
+    Ok(serde_json::json!({
+        "status": status_str,
+        "emergencyHeight": alarm.emergency_height,
+        "hasActiveReport": alarm.active_report.is_some(),
+    }))
+}
+
+/// `rstn_getStarkProof` — Returns the zk-STARK proof for a finalized block.
+///
+/// Light clients verify block validity with a succinct proof instead of
+/// re-executing every transaction. The proof is generated when the block is
+/// finalized (consensus round 2 commit) and stored alongside the block.
+///
+/// Params: [ { "height": 123 } ]  or  [ 123 ]
+/// Returns: { "height": u64, "proof": "0x...", "airCircuit": "RSTN-Tx-AIR-v1" }
+async fn get_stark_proof(state: &RpcState, params: Option<&Value>) -> Result<Value, RpcError> {
+    let arr = params_to_array(params)?;
+    let first = arr.get(0).ok_or_else(|| RpcError::InvalidParams("missing height".into()))?;
+
+    let height: u64 = if let Some(n) = first.as_u64() {
+        n
+    } else if let Some(obj) = first.as_object() {
+        obj.get("height")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| RpcError::InvalidParams("missing 'height' field".into()))?
+    } else if let Some(s) = first.as_str() {
+        s.parse::<u64>()
+            .map_err(|e| RpcError::InvalidParams(format!("invalid height: {}", e)))?
+    } else {
+        return Err(RpcError::InvalidParams("height must be a number".into()));
+    };
+
+    let proofs = state.stark_proofs.read().await;
+
+    match proofs.get(&height) {
+        Some(proof) => {
+            // Serialize the StarkProof to a hex blob for transport. Light
+            // clients decode + verify it without re-executing the block.
+            let json = serde_json::to_vec(proof)
+                .map_err(|e| RpcError::Internal(format!("failed to serialize STARK proof: {}", e)))?;
+            Ok(serde_json::json!({
+                "height": height,
+                "proof": format!("0x{}", hex::encode(&json)),
+                "airCircuit": "RSTN-Tx-AIR-v1",
+            }))
+        }
+        None => Err(RpcError::Internal(format!(
+            "no STARK proof for height {} (block may not be finalized yet)",
+            height
+        ))),
+    }
+}
+
+/// `rstn_getCircuitBreakers` — Returns active circuit-breaker trips.
+///
+/// Circuit breakers are on-chain safety valves. If a contract drains >X% of
+/// funds in Y minutes, or an oracle deviates >5% from median, the breaker
+/// trips and pauses the offending address. This RPC lets the dashboard show
+/// which addresses are paused and why.
+///
+/// Returns: { "trips": [...], "healthy": bool }
+async fn get_circuit_breakers(state: &RpcState) -> Result<Value, RpcError> {
+    let cb = state.circuit_breakers.read().await;
+    let trips = cb.active_trips();
+    let trip_json: Vec<Value> = trips.iter().map(|t| {
+        let scope_str = match t.scope {
+            rstn_core::circuit_breaker::PauseScope::Global => "Global",
+            rstn_core::circuit_breaker::PauseScope::AddressTransfers => "AddressTransfers",
+            rstn_core::circuit_breaker::PauseScope::OracleOps => "OracleOps",
+        };
+        serde_json::json!({
+            "scope": scope_str,
+            "address": t.address.map(|a| format!("0x{}", a.iter().map(|b| format!("{:02x}", b)).collect::<String>())),
+            "reason": t.reason,
+            "trippedAtHeight": t.tripped_at_height,
+        })
+    }).collect();
+    Ok(serde_json::json!({
+        "trips": trip_json,
+        "healthy": cb.is_healthy(),
+    }))
 }
