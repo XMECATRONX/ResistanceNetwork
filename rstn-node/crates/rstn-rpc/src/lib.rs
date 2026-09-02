@@ -283,16 +283,12 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         // -- Debug (testnet only) ---------------------------
         // M5: `rstn_debugSendTx` signs a tx with the node's validator keypair.
         // It is a critical security hole in production (an attacker could craft
-        // txs signed by the validator), so the entire code path is compiled OUT
-        // of release builds via the `debug-rpc` cargo feature. In a build
-        // WITHOUT that feature the method simply returns "not found", so it
-        // cannot be reached even if `is_testnet` is accidentally left true.
-        #[cfg(feature = "debug-rpc")]
+        // txs signed by the validator), so the handler enforces a runtime
+        // `is_testnet` gate (see `debug_send_tx`). In production builds
+        // (`is_testnet == false`) it always fails closed. We keep the method
+        // present in the dispatcher so feature-propagation cannot accidentally
+        // hide it — the runtime gate is the source of truth.
         "rstn_debugSendTx" => debug_send_tx(state, req.params.first()).await,
-        #[cfg(not(feature = "debug-rpc"))]
-        "rstn_debugSendTx" => Err(RpcError::MethodNotFound(
-            "rstn_debugSendTx is disabled in this build (M5)".into(),
-        )),
 
         // -- Staking --------------------------------------
         "rstn_stake" => stake(state, req.params.first()).await,
@@ -911,11 +907,9 @@ async fn send_transaction(state: &RpcState, tx: Option<&Value>) -> Result<Value,
 /// verify_signature -> mempool -> gossip -> propose -> finalize pipeline.
 /// Signs a transaction with the node's validator keypair and submits it.
 ///
-/// M5: this method is gated behind the `debug-rpc` cargo feature and is
-/// compiled OUT of release builds entirely. In a build without the feature
-/// the method is not present, so even a misconfigured `is_testnet = true`
-/// cannot expose the validator's signing capability.
-#[cfg(feature = "debug-rpc")]
+/// M5: this method is gated behind a runtime `is_testnet` check. In
+/// production (`is_testnet == false`) it always fails closed, so even a
+/// misconfigured node cannot expose the validator's signing capability.
 async fn debug_send_tx(state: &RpcState, params: Option<&Value>) -> Result<Value, RpcError> {
     // B2: this method signs a transaction with the node's validator keypair.
     // In production (is_testnet == false) exposing a key-signing RPC is a
