@@ -28,19 +28,33 @@ pub async fn start_rpc_server(state: Arc<RpcState>, port: u16) {
             Ok((mut stream, addr)) => {
                 let state = Arc::clone(&state);
                 tokio::spawn(async move {
-                    let mut buf = vec![0u8; 1024 * 1024];
-                    let n = match stream.read(&mut buf).await {
-                        Ok(n) if n > 0 => n,
-                        _ => return,
+                    // Robust HTTP request reader: keep reading until we have the
+                    // full headers (\r\n\r\n) AND the full body (Content-Length).
+                    // A single read() may return only a partial TCP segment,
+                    // which caused empty-body "Parse error" (-32700) responses.
+                    let mut raw: Vec<u8> = Vec::with_capacity(8192);
+                    let mut tmp = [0u8; 8192];
+                    let mut header_end: Option<usize> = None;
+                    loop {
+                        let n = match stream.read(&mut tmp).await {
+                            Ok(n) if n > 0 => n,
+                            _ => break,
+                        };
+                        raw.extend_from_slice(&tmp[..n]);
+                        if let Some(pos) = find_header_end(&raw) {
+                            header_end = Some(pos);
+                            break;
+                        }
+                        if raw.len() > 1024 * 1024 {
+                            // Request too large — abort.
+                            return;
+                        }
+                    }
+                    let Some(header_end) = header_end else {
+                        return;
                     };
 
-                    let raw = &buf[..n];
-                    let header_end = match find_header_end(raw) {
-                        Some(pos) => pos,
-                        None => return,
-                    };
-
-                    let header_str = String::from_utf8_lossy(&raw[..header_end]);
+                    let header_str = String::from_utf8_lossy(&raw[..header_end]).to_string();
                     let body_start = header_end + 4;
 
                     // Extract the Origin header for CORS allow-listing (M4).
