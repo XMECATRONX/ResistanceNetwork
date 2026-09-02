@@ -19,6 +19,8 @@ pub mod sharding;      // G12 -- cross-shard receipts + VRF shard assignment + d
 pub mod threshold_mempool; // G13 -- threshold-encrypted mempool (MEV elimination)
 pub mod forced_inclusion;  // G14 -- forced-inclusion pool (censorship resistance N+1)
 pub mod zk_stark;      // G15 -- zk-STARK foundation (hash-based, no trusted setup, PQ-resistant)
+pub mod nmt;           // G3-complete -- Namespaced Merkle Trees for application-level DAS
+pub mod fee_market;    // EIP-1559 fee market (base fee burned + tip to validator + dynamic inflation)
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
