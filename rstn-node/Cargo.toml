@@ -68,6 +68,7 @@ rstn-vm = { path = "crates/rstn-vm" }
 rstn-rpc = { path = "crates/rstn-rpc" }
 rstn-storage = { path = "crates/rstn-storage" }
 rstn-bridge = { path = "crates/rstn-bridge" }
+rstn-sol-transpiler = { path = "crates/rstn-sol-transpiler" }
 rstn-node = { path = "crates/rstn-node" }
 
 [profile.release]
