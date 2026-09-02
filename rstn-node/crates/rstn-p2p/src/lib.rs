@@ -325,7 +325,11 @@ pub fn create_swarm(
             // truth; libp2p envelope signatures would be redundant.
             let gossipsub_config = gossipsub::ConfigBuilder::default()
                 .heartbeat_interval(Duration::from_millis(500))
-                .validation_mode(gossipsub::ValidationMode::Strict)
+                // ValidationMode::None: we use MessageAuthenticity::Anonymous
+                // (the application-layer Dilithium3 signature is the source of
+                // truth), so libp2p must NOT enforce envelope signatures. Strict
+                // + Anonymous is an invalid combination that fails swarm build.
+                .validation_mode(gossipsub::ValidationMode::None)
                 // M1: cap message size at 1MB. Blocks are the largest payload
                 // and rarely exceed a few hundred KB; 4MB let a malicious peer
                 // amplify 4MB of garbage to every peer before verification.
