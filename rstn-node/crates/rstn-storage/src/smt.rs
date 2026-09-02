@@ -210,7 +210,7 @@ impl<'a> SparseMerkleTree<'a> {
     pub fn flush(&self) -> Result<(), sled::Error> {
         let mut batch = sled::Batch::default();
         for (k, v) in &self.overlay {
-            batch = batch.insert(k.clone(), v.to_vec());
+            batch.insert(k.clone(), v.to_vec());
         }
         self.db.apply_batch(batch)?;
         Ok(())
