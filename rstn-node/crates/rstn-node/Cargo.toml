@@ -23,6 +23,7 @@ rstn-vm.workspace = true
 rstn-rpc.workspace = true
 rstn-storage.workspace = true
 rstn-bridge.workspace = true
+rstn-sol-transpiler.workspace = true
 hex.workspace = true
 libp2p.workspace = true
 futures = "0.3"
