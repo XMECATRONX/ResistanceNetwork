@@ -180,44 +180,47 @@ pub fn transpile(evm_bytecode: &[u8]) -> Result<TranspiledContract, TranspileErr
 
 /// Check whether an opcode is implemented by the RSTN-VM.
 ///
-/// RSTN-VM implements the common EVM subset. We use the explicit constants
-/// that exist in `rstn_vm::opcodes` plus the contiguous ranges (DUP1-16,
-/// SWAP1-16, PUSH1-32, LOG0-4) that the EVM defines as ranges.
+/// RSTN-VM implements the common EVM subset. We match on raw byte values
+/// (the EVM opcode numbers) rather than named constants, because rstn-vm
+/// only defines `pub const` aliases for a subset of opcodes. Matching on
+/// literals is unambiguous (no variable-binding confusion) and covers the
+/// full supported set including opcodes that have no named constant yet.
 fn is_supported_opcode(op: u8) -> bool {
-    use rstn_vm as v;
-    // Individual opcodes defined in the VM. Qualified paths are required so the
-    // pattern matches the *constants*, not fresh variable bindings.
-    let single = matches!(
-        op,
-        v::OP_STOP | v::OP_ADD | v::OP_MUL | v::OP_SUB | v::OP_DIV | v::OP_SDIV | v::OP_MOD | v::OP_SMOD
-        | v::OP_ADDMOD | v::OP_MULMOD | v::OP_EXP | v::OP_SIGNEXTEND
-        | v::OP_LT | v::OP_GT | v::OP_SLT | v::OP_SGT | v::OP_EQ | v::OP_ISZERO | v::OP_AND | v::OP_OR
-        | v::OP_XOR | v::OP_NOT | v::OP_BYTE | v::OP_SHL | v::OP_SHR | v::OP_SAR
-        | v::OP_SHA3
-        | v::OP_ADDRESS | v::OP_BALANCE | v::OP_ORIGIN | v::OP_CALLER | v::OP_CALLVALUE
-        | v::OP_CALLDATALOAD | v::OP_CALLDATASIZE | v::OP_CALLDATACOPY
-        | v::OP_CODESIZE | v::OP_CODECOPY | v::OP_GASPRICE
-        | v::OP_EXTCODESIZE | v::OP_EXTCODECOPY | v::OP_RETURNDATASIZE | v::OP_RETURNDATACOPY
-        | v::OP_EXTCODEHASH | v::OP_SELFBALANCE | v::OP_CHAINID | v::OP_BASEFEE
-        | v::OP_BLOCKHASH | v::OP_COINBASE | v::OP_TIMESTAMP | v::OP_NUMBER | v::OP_DIFFICULTY
-        | v::OP_GASLIMIT
-        | v::OP_POP | v::OP_MLOAD | v::OP_MSTORE | v::OP_MSTORE8 | v::OP_SLOAD | v::OP_SSTORE
-        | v::OP_JUMP | v::OP_JUMPI | v::OP_PC | v::OP_MSIZE | v::OP_GAS
-        | v::OP_JUMPDEST
-        | v::OP_PUSH0
-        | v::OP_RETURN | v::OP_REVERT | v::OP_INVALID | v::OP_SELFDESTRUCT
-        | v::OP_CALL | v::OP_CALLCODE | v::OP_DELEGATECALL | v::OP_STATICCALL
-    );
-    if single {
-        return true;
-    }
-    // Contiguous EVM ranges the VM implements by convention.
+    // Arithmetic (0x00-0x0B) + comparison/bitwise (0x10-0x1D) + SHA3 (0x20)
+    // Environment (0x30-0x48), Block (0x40-0x48), Stack/Memory/Storage/Flow
+    // (0x50-0x5B), Push0 (0x5F), Logging (0xA0-0xA4), System (0xF0-0xFF).
     matches!(
+        op,
+        // 0x00-0x0B: STOP, ADD, MUL, SUB, DIV, SDIV, MOD, SMOD, ADDMOD, MULMOD, EXP, SIGNEXTEND
+        0x00..=0x0B
+        // 0x10-0x1D: LT, GT, SLT, SGT, EQ, ISZERO, AND, OR, XOR, NOT, BYTE, SHL, SHR, SAR
+        | 0x10..=0x1D
+        // 0x20: SHA3 (Keccak)
+        | 0x20
+        // 0x30-0x3F: ADDRESS, BALANCE, ORIGIN, CALLER, CALLVALUE, CALLDATALOAD,
+        //   CALLDATASIZE, CALLDATACOPY, CODESIZE, CODECOPY, GASPRICE, EXTCODESIZE,
+        //   EXTCODECOPY, RETURNDATASIZE, RETURNDATACOPY, EXTCODEHASH (0x3F)
+        | 0x30..=0x3F
+        // 0x40-0x48: BLOCKHASH, COINBASE, TIMESTAMP, NUMBER, DIFFICULTY/PREVRANDAO,
+        //   GASLIMIT, CHAINID(0x46), SELFBALANCE(0x47), BASEFEE(0x48)
+        | 0x40..=0x48
+        // 0x50-0x5B: POP, MLOAD, MSTORE, MSTORE8, SLOAD, SSTORE, JUMP, JUMPI, PC,
+        //   MSIZE, GAS, JUMPDEST
+        | 0x50..=0x5B
+        // 0x5F: PUSH0
+        | 0x5F
+        // 0xA0-0xA4: LOG0..LOG4
+        | 0xA0..=0xA4
+        // 0xF0-0xF5: CREATE, CALL, CALLCODE, RETURN, DELEGATECALL, CREATE2
+        | 0xF0..=0xF5
+        // 0xFD: REVERT, 0xFE: INVALID, 0xFF: SELFDESTRUCT
+        | 0xFD..=0xFF
+    ) || matches!(
+        // Contiguous EVM ranges the VM implements by convention.
         op,
         0x60..=0x7F  // PUSH1..PUSH32
         | 0x80..=0x8F // DUP1..DUP16
         | 0x90..=0x9F // SWAP1..SWAP16
-        | 0xA0..=0xA4 // LOG0..LOG4
     )
 }
 
@@ -293,7 +296,7 @@ mod tests {
     #[test]
     fn transpile_log_range() {
         // LOG2 (0xA2) STOP — LOG range supported
-        let evm = vec![OP_LOG2, OP_STOP];
+        let evm = vec![0xA2, OP_STOP];
         let result = transpile(&evm).expect("LOG2 transpiles");
         assert_eq!(result.bytecode, evm);
     }
