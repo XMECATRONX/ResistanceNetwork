@@ -213,8 +213,7 @@ impl LockVerifier for EthereumReceiptProof {
         // and must match the reference in its parent. The root hash must equal
         // receipts_root.
         if !self.trie_branch.is_empty() {
-            verify_mpt_branch(&self.trie_branch, &self.receipts_root)
-                .map_err(SpvError::InvalidTrieProof)?;
+            verify_mpt_branch(&self.trie_branch, &self.receipts_root)?;
         }
         Ok(())
     }

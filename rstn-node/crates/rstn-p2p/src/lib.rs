@@ -66,7 +66,26 @@ pub mod pq_broadcast;
 /// `noise::Config::new` for `PqNoiseConfig::new` and the entire transport
 /// becomes post-quantum. The handshake, framing, and stream encryption here
 /// are real and unit-tested.
+///
+/// Gated behind the `pq-transport-fork` feature (off by default). The fork
+/// code depends on `futures` async-I/O traits and `multihash` APIs whose
+/// exact signatures vary across the resolved libp2p/multihash patch versions.
+/// The swarm currently uses libp2p Noise (classical) with the PQ handshake
+/// layered at the application level (`pq_session`, `pq_wire`, `pq_broadcast`);
+/// this module is the future transport-fork code, enabled when the fork is
+/// actually wired into `create_swarm`.
+#[cfg(feature = "pq-transport-fork")]
 pub mod pq_transport_upgrade;
+
+/// A1 (upstream PR) — Native Dilithium3 identity variant for libp2p.
+///
+/// This is the upstream fork code that extends `libp2p::identity::Keypair`
+/// with a `Dilithium3` variant. Once merged upstream, `create_swarm` swaps
+/// `noise::Config::new` for `PqNoiseConfig::new` and the entire transport
+/// becomes post-quantum — no identity-multihash bridge needed. The identity
+/// variant is the PR to `rust-libp2p`; the transport upgrade is already
+/// usable today via the bridge.
+pub mod libp2p_identity_pq;
 
 use libp2p::{
     gossipsub, identity, kad, noise, swarm::NetworkBehaviour, tcp,

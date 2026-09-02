@@ -48,6 +48,10 @@ use rstn_core::TxType;
 // SPV lock-verification framework (C1-production).
 pub mod spv;
 
+// Bring the `LockVerifier` trait into scope so `spv_proof.verify(...)` resolves
+// (the `verify` method is a trait method, not an inherent one).
+use crate::spv::LockVerifier;
+
 // Light-client header store — feeds canonical headers + confirmation depth to
 // the SPV verifier. Closes the C1-production gap: the verifier can now confirm
 // a header is on the canonical source chain, not just cryptographically valid.
@@ -75,7 +79,7 @@ pub enum BridgeError {
 
 // --- Supported Source Chains -------------------------------
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum SourceChain {
     Bitcoin,

@@ -18,3 +18,10 @@ rand.workspace = true
 serde-big-array = "0.5"
 # A1 (fork): async transport upgrade needs futures traits (AsyncRead/Write).
 futures = "0.3"
+
+[features]
+default = []
+# A1 (fork): post-quantum transport-level upgrade (libp2p Noise replacement).
+# Off by default — the fork code depends on futures/multihash APIs that vary
+# across patch versions; enable when wiring the transport fork into the swarm.
+pq-transport-fork = []

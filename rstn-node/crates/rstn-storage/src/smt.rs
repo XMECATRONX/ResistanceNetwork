@@ -162,7 +162,6 @@ impl<'a> SparseMerkleTree<'a> {
             path.push(bit);
         }
         // Now recompute bottom-up.
-        let mut path: Vec<u8> = Vec::with_capacity(TREE_DEPTH);
         // Collect bits first.
         let mut bits = Vec::with_capacity(TREE_DEPTH);
         for depth in 0..TREE_DEPTH {
@@ -175,14 +174,11 @@ impl<'a> SparseMerkleTree<'a> {
             let bit = bits[depth];
             // The node at this depth has children: `child` (along `bit`) and
             // the sibling (along `1 - bit`).
-            let mut sibling_path = child_path.clone();
-            // sibling is the path WITHOUT the last bit, then the opposite bit.
-            // child_path currently is the path to the child (length == depth+1 bits).
-            // We need the sibling at the same parent, i.e. parent path = child_path[..depth],
-            // sibling bit = 1 - bit.
-            // child_path has length `depth+1`; the parent path is the first `depth` bits.
+            // Sibling is at the same parent (path = first `depth` bits) with
+            // the opposite bit. child_path has length `depth+1`; the parent
+            // path is the first `depth` bits.
             let parent_path: Vec<u8> = child_path[..depth].to_vec();
-            sibling_path = parent_path.clone();
+            let mut sibling_path = parent_path.clone();
             sibling_path.push(1 - bit);
             let sibling_hash = self.get_node(depth + 1, &sibling_path);
             let (left, right) = if bit == 0 {
@@ -212,8 +208,7 @@ impl<'a> SparseMerkleTree<'a> {
 
     /// Flush the in-memory overlay to sled.
     pub fn flush(&self) -> Result<(), sled::Error> {
-        // Batch insert for efficiency.
-        let mut batch = self.db.batch();
+        let mut batch = sled::Batch::default();
         for (k, v) in &self.overlay {
             batch = batch.insert(k.clone(), v.to_vec());
         }
