@@ -854,7 +854,12 @@ impl ConsensusState {
     /// connecting nodes with fake timestamps to drift the network clock
     /// and accept a fraudulent alternative chain.
     pub fn validate_timestamp_mtp(&self, block: &Block) -> Result<(), CoreError> {
-        if self.chain.is_empty() {
+        // MTP-11 requires a full window of 11 blocks to be meaningful.
+        // In the early chain (< 11 blocks), the median is dominated by the
+        // genesis timestamp and would reject legitimate real-time blocks.
+        // This mirrors Bitcoin's behavior: MTP only constrains after enough
+        // blocks exist for a robust median.
+        if self.chain.len() < 11 {
             return Ok(());
         }
         // Collect timestamps of the last 11 finalized blocks (MTP-11).
