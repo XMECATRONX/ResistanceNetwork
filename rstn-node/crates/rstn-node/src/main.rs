@@ -22,7 +22,7 @@ use rstn_core::{
     GenesisConfig, ConsensusState, genesis, Validator, ValidatorStatus,
     consensus::ConsensusEngine,
 };
-use rstn_crypto::{Dilithium3Keypair, PUBKEY_SIZE, PRIVKEY_SIZE};
+use rstn_crypto::Dilithium3Keypair;
 use rstn_storage::RstnDB;
 use rstn_rpc::RpcState;
 use network::{NetworkChannels, OutboundMessage, run_p2p_event_loop};
@@ -129,6 +129,7 @@ enum Commands {
 /// A validator entry loaded from genesis.json.
 #[derive(serde::Deserialize)]
 struct GenesisValidator {
+    #[allow(dead_code)]
     address: String,
     pubkey_hex: String,
     seckey_hex: String,
@@ -278,7 +279,17 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
                 ..GenesisConfig::default()
             }
         } else {
-            GenesisConfig::default()
+            // Dev mode: use current wall-clock time as genesis_time so the
+            // MTP-11 anti-timejacking check does not reject real-time blocks
+            // (genesis_time=0 would make MTP=0, and live blocks ~2h ahead).
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            GenesisConfig {
+                genesis_time: now_ms,
+                ..GenesisConfig::default()
+            }
         };
         let block = genesis::build_genesis_block(&config);
         db.put_block(0, &block)?;
@@ -544,7 +555,7 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
         // production task. If the sender is dropped, the channel closes and
         // inbound.recv() returns None immediately, which makes the select! in
         // start_block_production break the loop before any block is produced.
-        let (dummy_inbound_tx, mut dummy_inbound) = tokio::sync::mpsc::channel(1);
+        let (dummy_inbound_tx, dummy_inbound) = tokio::sync::mpsc::channel(1);
         let (dummy_outbound, _) = tokio::sync::mpsc::channel(1);
 
         let rpc_state_for_blocks = Arc::clone(&rpc_state);

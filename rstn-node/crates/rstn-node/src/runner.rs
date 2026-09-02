@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use rstn_rpc::{RpcState, RpcRequest, handle_rpc, check_rpc_rate_limit, validate_api_key, cors_allow_origin};
 use rstn_core::consensus::ConsensusEngine;
 use rstn_storage::compute_state_root;
-use rstn_bridge::BridgeState;
+// Note: rstn_bridge::BridgeState is used by the RPC layer, not directly here.
 use crate::network::{NetworkMessage, OutboundMessage};
 
 /// Start the JSON-RPC HTTP server with CORS support.
@@ -1322,7 +1322,6 @@ pub async fn start_block_production(
                 match msg {
                     Some(NetworkMessage::BlockProposal(block)) => {
                         let height = block.header.height;
-                        let hash = hex::encode(block.hash());
 
                         // -- Determine if we're BEHIND before updating highest_seen --
                         // A node is "behind" only if it has ALREADY seen a block HIGHER

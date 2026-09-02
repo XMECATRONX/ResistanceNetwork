@@ -39,6 +39,7 @@ static PUBLISH_NONCE: AtomicU64 = AtomicU64::new(0);
 
 /// Messages received from the P2P network, delivered to the consensus engine.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum NetworkMessage {
     /// A block proposal from the leader.
     BlockProposal(Block),
@@ -60,6 +61,7 @@ pub enum NetworkMessage {
 
 /// Outbound messages the consensus engine wants to broadcast.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum OutboundMessage {
     Block(Block),
     Transaction(Transaction),
@@ -77,8 +79,10 @@ pub enum OutboundMessage {
 /// Channel pair for P2P <-> consensus communication.
 pub struct NetworkChannels {
     /// Messages received from peers (consensus engine reads this).
+    #[allow(dead_code)]
     pub inbound: mpsc::Receiver<NetworkMessage>,
     /// Messages to broadcast to peers (consensus engine writes this).
+    #[allow(dead_code)]
     pub outbound: mpsc::Sender<OutboundMessage>,
 }
 
