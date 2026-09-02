@@ -932,8 +932,31 @@ async fn debug_send_tx(state: &RpcState, params: Option<&Value>) -> Result<Value
     let keypair = state.node_keypair.as_ref()
         .ok_or_else(|| RpcError::Internal("this node has no signing keypair".into()))?;
 
-    // Recipient address (20 bytes, bech32 "rstn1..." or hex)
-    let to_addr = if let Some(s) = p.get("to").and_then(|v| v.as_str()) {
+    // Recipient address (20 bytes, bech32 "rstn1..." or hex).
+    // For ContractDeploy the 'to' is empty (contracts have no recipient);
+    // we use the all-zero address as a sentinel in that case.
+    let is_contract_deploy = p.get("tx_type")
+        .and_then(|v| v.as_str())
+        .map(|s| s == "ContractDeploy")
+        .unwrap_or(false);
+    let to_addr = if is_contract_deploy {
+        // For deploys: an empty/missing 'to' is valid (zero address).
+        if let Some(s) = p.get("to").and_then(|v| v.as_str()) {
+            if s.is_empty() {
+                [0u8; 20]
+            } else {
+                let bytes = parse_address(s)?;
+                if bytes.len() != 20 {
+                    return Err(RpcError::InvalidParams(format!("'to' must be 20 bytes, got {}", bytes.len())));
+                }
+                let mut arr = [0u8; 20];
+                arr.copy_from_slice(&bytes);
+                arr
+            }
+        } else {
+            [0u8; 20]
+        }
+    } else if let Some(s) = p.get("to").and_then(|v| v.as_str()) {
         let bytes = parse_address(s)?;
         if bytes.len() != 20 {
             return Err(RpcError::InvalidParams(format!("'to' must be 20 bytes, got {}", bytes.len())));

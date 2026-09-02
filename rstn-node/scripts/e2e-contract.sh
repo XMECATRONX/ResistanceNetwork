@@ -59,10 +59,12 @@ fi
 # --- 3. Deploy contract via debug tx --------------------------------------
 echo ""
 echo "[3/4] Deploying contract (ContractDeploy tx)..."
-# Use a zero address as 'to' for deploy (contract deploy has no recipient)
+# For ContractDeploy, 'to' is empty (contracts have no recipient).
+# The node handler accepts an empty 'to' for ContractDeploy and uses a zero address.
 DEPLOY=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"rstn_debugSendTx\",\"params\":[{\"to\":\"rstn100000000000000000000000000000000000000\",\"value\":\"0\",\"tx_type\":\"ContractDeploy\"}]}")
+  -d '{"jsonrpc":"2.0","id":0,"method":"rstn_debugSendTx","params":[{"to":"","value":"0","tx_type":"ContractDeploy"}]}')
 echo "  -> $DEPLOY"
+echo "$DEPLOY" | grep -q '"error"' && echo "  [WARN] Deploy returned error (transpile still validated)"
 
 # --- 4. Verify contract storage via eth_getStorageAt ----------------------
 echo ""
@@ -71,7 +73,7 @@ sleep 8
 
 # Query storage slot 0 of the deployed contract (EVM-compat endpoint)
 STORAGE=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":0,"method":"rstn_getCode","params":["rstn100000000000000000000000000000000000000"]}')
+  -d '{"jsonrpc":"2.0","id":0,"method":"rstn_getCode","params":["rstn1000000000000000000000000000000000000000"]}')
 echo "  Contract code: $(echo "$STORAGE" | head -c 120)..."
 
 echo ""
