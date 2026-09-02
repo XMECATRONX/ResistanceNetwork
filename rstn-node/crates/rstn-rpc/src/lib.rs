@@ -2217,7 +2217,7 @@ async fn call_contract(state: &RpcState, params: Option<&Value>) -> Result<Value
 /// Lets the frontend predict where a contract will be deployed before sending the tx.
 /// Params: { from: string, nonce: number }
 /// Returns: { address: string }
-async fn get_contract_address(state: &RpcState, params: Option<&Value>) -> Result<Value, RpcError> {
+async fn get_contract_address(_state: &RpcState, params: Option<&Value>) -> Result<Value, RpcError> {
     let p = params
         .ok_or_else(|| RpcError::InvalidParams("missing params".into()))?;
     let from_str = p.get("from")

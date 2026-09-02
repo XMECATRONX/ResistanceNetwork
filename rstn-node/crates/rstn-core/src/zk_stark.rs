@@ -126,6 +126,7 @@ pub struct Fri {
 impl Fri {
     /// The evaluation domain: powers of a generator over a Keccak-derived field.
     /// We use a simple domain of length `n` (must be a power of 2).
+    #[allow(dead_code)]
     fn domain(&self, n: usize) -> Vec<u8> {
         (0..n).map(|i| i as u8).collect()
     }

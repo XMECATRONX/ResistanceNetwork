@@ -124,6 +124,7 @@ const MAX_MSG_PER_SEC: u64 = 100;
 const MAX_PEERS_PER_IP: usize = 3;
 
 /// Maximum total connected peers.
+#[allow(dead_code)]
 const MAX_PEERS: usize = 50;
 
 /// How long a banned peer stays banned.

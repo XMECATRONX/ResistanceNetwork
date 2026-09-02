@@ -242,6 +242,7 @@ struct BufferedMessage {
     /// The next hop this message should be forwarded to.
     next_hop: Option<RelayId>,
     /// Arrival time (for delay accounting).
+    #[allow(dead_code)]
     arrived_at: f64,
 }
 

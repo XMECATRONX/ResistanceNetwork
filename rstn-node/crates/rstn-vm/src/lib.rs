@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use rstn_crypto::{Dilithium3PublicKey, Dilithium3Signature, verify_signature, PUBKEY_SIZE, SIG_SIZE};
 
+pub mod formal;
+
 #[derive(Debug, Error)]
 pub enum VmError {
     #[error("invalid opcode: 0x{0:02X}")]
@@ -566,6 +568,7 @@ impl U256 {
 }
 
 /// Signed 256-bit helper for SDIV/SMOD/SLT/SGT/SAR.
+#[allow(non_camel_case_types)]
 enum i256 { Pos(U256), Neg(U256) }
 
 impl i256 {
@@ -576,6 +579,7 @@ impl i256 {
         }
     }
 
+    #[allow(dead_code)]
     fn neg(self) -> i256 {
         match self {
             i256::Pos(v) => {
@@ -1569,7 +1573,7 @@ impl<'a> RstnVM<'a> {
         // the actual forwarded gas is min(requested, 63/64 of remaining).
         let remaining = self.gas.saturating_sub(self.gas_used);
         let max_forward = remaining - remaining / 64; // 63/64 of remaining
-        let child_gas = gas.as_usize().min(max_forward as usize) as u64;
+        let _child_gas = gas.as_usize().min(max_forward as usize) as u64;
 
         // Execute the child frame. We reuse our own VM state (stack/memory
         // are saved/restored) to keep the implementation simple. A production
