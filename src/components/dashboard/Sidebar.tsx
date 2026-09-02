@@ -23,6 +23,8 @@ import {
   Monitor,
   Users,
   FileCode2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -94,6 +96,22 @@ interface SidebarProps {
 
 export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Collapse state persisted in localStorage so the user's choice survives reloads
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("rstn_sidebar_collapsed") === "true";
+  });
+
+  const toggleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem("rstn_sidebar_collapsed", String(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <>
       {/* Mobile toggle button — aligned with header content, left-aligned */}
@@ -139,35 +157,59 @@ export const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
         )}
       </AnimatePresence>
 
-      {/* Desktop sidebar */}
-      <aside className="relative hidden w-72 flex-col border-r border-sidebar-border bg-sidebar-background lg:flex">
-        <SidebarContent activeView={activeView} onViewChange={onViewChange} />
-      </aside>
+      {/* Desktop sidebar — collapsible: full width (288px) or icon rail (72px) */}
+      <motion.aside
+        animate={{ width: collapsed ? 72 : 288 }}
+        transition={{ type: "spring", damping: 30, stiffness: 250 }}
+        className="relative hidden flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar-background lg:flex"
+        style={{ overflow: "hidden" }}
+      >
+        <SidebarContent
+          activeView={activeView}
+          onViewChange={onViewChange}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapse}
+        />
+      </motion.aside>
     </>
   );
 };
 
 interface SidebarContentProps extends SidebarProps {
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const SidebarContent = ({
   activeView,
   onViewChange,
   onClose,
+  collapsed = false,
+  onToggleCollapse,
 }: SidebarContentProps) => {
   const { t } = useTranslation();
   return (
     <>
-      {/* Logo */}
-      <div className="relative flex h-20 items-center gap-3 border-b border-sidebar-border px-6">
-        <RstnLogo size="md" />
-        <div className="sidebar-logo-text">
-          <h1 className="font-display text-base font-bold tracking-tight text-foreground">
-            RSTN
-          </h1>
-          <p className="label-muted mt-0.5">{t("sidebar.tagline")}</p>
-        </div>
+      {/* Logo — icon-only when collapsed */}
+      <div
+        className={`relative flex h-20 items-center border-b border-sidebar-border ${
+          collapsed ? "justify-center px-2" : "gap-3 px-6"
+        }`}
+      >
+        {collapsed ? (
+          <RstnLogo size="md" />
+        ) : (
+          <>
+            <RstnLogo size="md" />
+            <div className="sidebar-logo-text">
+              <h1 className="font-display text-base font-bold tracking-tight text-foreground">
+                RSTN
+              </h1>
+              <p className="label-muted mt-0.5">{t("sidebar.tagline")}</p>
+            </div>
+          </>
+        )}
         {onClose && (
           <button
             onClick={onClose}
@@ -179,10 +221,12 @@ const SidebarContent = ({
         )}
       </div>
 
-      {/* Nav — clean labels only, no descriptions */}
+      {/* Nav — icon-only when collapsed */}
       <nav
-        className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto"
-        aria-label="Navegación del terminal"
+        className={`flex-1 overflow-y-auto py-4 ${
+          collapsed ? "space-y-1 px-2" : "space-y-0.5 px-3"
+        }`}
+        aria-label="Terminal navigation"
       >
         {NAV_ITEMS.map((item) => {
           const isActive = activeView === item.id;
@@ -192,9 +236,12 @@ const SidebarContent = ({
               key={item.id}
               onClick={() => onViewChange(item.id)}
               aria-current={isActive ? "page" : undefined}
-              className={`group relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar-background ${
-                isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50"
-              }`}
+              title={collapsed ? t(item.labelKey) : undefined}
+              className={`group relative flex w-full items-center rounded-md text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                collapsed
+                  ? "h-10 w-10 justify-center"
+                  : "gap-3 px-3 py-2.5"
+              } ${isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50"}`}
               style={isActive ? { boxShadow: "var(--shadow-xs)" } : undefined}
             >
               {isActive && (
@@ -207,49 +254,72 @@ const SidebarContent = ({
               <Icon
                 className="h-[18px] w-[18px] shrink-0 transition-all duration-200"
                 style={{
-                  color: isActive
-                    ? "var(--primary)"
-                    : "var(--sidebar-foreground)",
+                  color: isActive ? "var(--primary)" : "var(--sidebar-foreground)",
                 }}
                 strokeWidth={1.5}
               />
-              <span
-                className="font-body text-[13px] font-medium transition-colors truncate"
-                style={{
-                  color: isActive
-                    ? "var(--foreground)"
-                    : "var(--sidebar-foreground)",
-                }}
-              >
-                {t(item.labelKey)}
-              </span>
+              {!collapsed && (
+                <span
+                  className="font-body text-[13px] font-medium transition-colors truncate"
+                  style={{
+                    color: isActive
+                      ? "var(--foreground)"
+                      : "var(--sidebar-foreground)",
+                  }}
+                >
+                  {t(item.labelKey)}
+                </span>
+              )}
             </button>
           );
         })}
       </nav>
 
-      {/* Footer status */}
-      <div className="border-t border-sidebar-border p-4">
-        <div className="card p-3">
-          <div className="flex items-center gap-2">
-            <span
-              className="dot"
-              style={{
-                background: "hsl(150 70% 50%)",
-                boxShadow: "0 0 6px hsl(150 70% 50% / 0.40)",
-              }}
-            />
-            <span className="font-body text-[11px] font-medium text-foreground">
-              {t("sidebar.phase")}
-            </span>
-          </div>
-          <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">
-            {t("sidebar.phaseSub")}
-          </p>
-        </div>
-        <p className="mt-2 px-1 font-body text-[9px] leading-relaxed text-muted-foreground/40">
-          {t("sidebar.disclaimer")}
-        </p>
+      {/* Footer status — compact when collapsed */}
+      <div
+        className={`border-t border-sidebar-border ${
+          collapsed ? "p-2" : "p-4"
+        }`}
+      >
+        {collapsed ? (
+          <button
+            onClick={onToggleCollapse}
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            aria-label="Expand sidebar"
+          >
+            <PanelLeftOpen className="h-4 w-4" strokeWidth={1.5} />
+          </button>
+        ) : (
+          <>
+            <div className="card p-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="dot"
+                  style={{
+                    background: "hsl(150 70% 50%)",
+                    boxShadow: "0 0 6px hsl(150 70% 50% / 0.40)",
+                  }}
+                />
+                <span className="font-body text-[11px] font-medium text-foreground">
+                  {t("sidebar.phase")}
+                </span>
+                <button
+                  onClick={onToggleCollapse}
+                  className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  aria-label="Collapse sidebar"
+                >
+                  <PanelLeftClose className="h-4 w-4" strokeWidth={1.5} />
+                </button>
+              </div>
+              <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+                {t("sidebar.phaseSub")}
+              </p>
+            </div>
+            <p className="mt-2 px-1 font-body text-[9px] leading-relaxed text-muted-foreground/40">
+              {t("sidebar.disclaimer")}
+            </p>
+          </>
+        )}
       </div>
     </>
   );
