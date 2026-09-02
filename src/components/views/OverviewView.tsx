@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import {
   Activity,
   Zap,
@@ -25,34 +26,8 @@ import {
   ErrorBanner,
 } from "@/components/dashboard/Skeleton";
 
-const SYSTEM_HEALTH = [
-  {
-    label: "Consenso",
-    status: "Operacional",
-    icon: Network,
-    color: "hsl(150 100% 45%)",
-  },
-  {
-    label: "P2P Network",
-    status: "Operacional",
-    icon: Server,
-    color: "hsl(150 100% 45%)",
-  },
-  {
-    label: "Storage",
-    status: "Operacional",
-    icon: HardDrive,
-    color: "hsl(185 100% 55%)",
-  },
-  {
-    label: "Sync",
-    status: "Sincronizado",
-    icon: CheckCircle2,
-    color: "hsl(150 60% 50%)",
-  },
-];
-
 export const OverviewView = () => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<ExplorerStats | null>(null);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +44,7 @@ export const OverviewView = () => {
       setError(null);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "No se pudo conectar al nodo RSTN",
+        err instanceof Error ? err.message : t("views.overview.connectError"),
       );
     } finally {
       setLoading(false);
@@ -94,7 +69,7 @@ export const OverviewView = () => {
           setError(
             err instanceof Error
               ? err.message
-              : "No se pudo conectar al nodo RSTN",
+              : t("views.overview.connectError"),
           );
       } finally {
         if (active) setLoading(false);
@@ -106,7 +81,7 @@ export const OverviewView = () => {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [t]);
 
   const explorerStats = stats ?? {
     blockHeight: 0,
@@ -120,9 +95,36 @@ export const OverviewView = () => {
     shardCount: 64,
   };
 
+  const SYSTEM_HEALTH = [
+    {
+      label: t("views.overview.sysConsensus"),
+      status: t("views.overview.sysOperational"),
+      icon: Network,
+      color: "hsl(150 100% 45%)",
+    },
+    {
+      label: t("views.overview.sysP2p"),
+      status: t("views.overview.sysOperational"),
+      icon: Server,
+      color: "hsl(150 100% 45%)",
+    },
+    {
+      label: t("views.overview.sysStorage"),
+      status: t("views.overview.sysOperational"),
+      icon: HardDrive,
+      color: "hsl(150 100% 55%)",
+    },
+    {
+      label: t("views.overview.sysSync"),
+      status: t("views.overview.sysSynced"),
+      icon: CheckCircle2,
+      color: "hsl(150 60% 50%)",
+    },
+  ];
+
   const QUICK_METRICS = [
     {
-      label: "Throughput actual",
+      label: t("views.overview.metricThroughput"),
       numeric: explorerStats.tps,
       unit: "TPS",
       icon: Zap,
@@ -130,7 +132,7 @@ export const OverviewView = () => {
       decimals: 0,
     },
     {
-      label: "Validadores activos",
+      label: t("views.overview.metricActiveValidators"),
       numeric: explorerStats.activeValidators,
       unit: "",
       icon: Server,
@@ -138,20 +140,53 @@ export const OverviewView = () => {
       decimals: 0,
     },
     {
-      label: "Tx pendientes",
+      label: t("views.overview.metricPendingTxs"),
       numeric: explorerStats.pendingTxs,
       unit: "",
       icon: Activity,
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       decimals: 0,
     },
     {
-      label: "Shards activos",
+      label: t("views.overview.metricActiveShards"),
       numeric: explorerStats.shardCount,
       unit: "",
       icon: Boxes,
       color: "hsl(150 70% 50%)",
       decimals: 0,
+    },
+  ];
+
+  const SPECS = [
+    {
+      label: t("views.overview.specBlockTime"),
+      value: NETWORK_STATS.blockTime,
+      icon: Clock,
+    },
+    {
+      label: t("views.overview.specFinality"),
+      value: NETWORK_STATS.finality,
+      icon: CheckCircle2,
+    },
+    {
+      label: t("views.overview.specLatency"),
+      value: NETWORK_STATS.latency,
+      icon: Network,
+    },
+    {
+      label: t("views.overview.specTxCost"),
+      value: NETWORK_STATS.txCost,
+      icon: Zap,
+    },
+    {
+      label: t("views.overview.specEnergy"),
+      value: NETWORK_STATS.energyEfficiency,
+      icon: Gauge,
+    },
+    {
+      label: t("views.overview.specStorage"),
+      value: NETWORK_STATS.storage,
+      icon: Database,
     },
   ];
 
@@ -171,11 +206,9 @@ export const OverviewView = () => {
         />
         <p className="font-body text-xs leading-relaxed text-muted-foreground">
           <span className="font-semibold" style={{ color: "hsl(150 70% 50%)" }}>
-            Datos simulados —{" "}
+            {t("views.overview.simBadge")}{" "}
           </span>
-          RSTN está en Fase 0 (especificación). Las métricas mostradas son
-          objetivos de diseño arquitectónicos, no datos en vivo de una red
-          operativa.
+          {t("views.overview.simBody")}
         </p>
       </div>
 
@@ -195,14 +228,16 @@ export const OverviewView = () => {
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="font-display text-xl font-semibold text-foreground">
-                  Estado de la Red
+                  {t("views.overview.netStatus")}
                 </h2>
                 <ConnectionBadge />
               </div>
               <p className="mt-1 font-mono text-xs text-muted-foreground">
-                Bloque #{explorerStats.blockHeight.toLocaleString()} · Época
-                actual · Finalidad {explorerStats.avgBlockTime} · Bloque cada{" "}
-                {NETWORK_STATS.blockTime}
+                {t("views.overview.netBlock", {
+                  height: explorerStats.blockHeight.toLocaleString(),
+                  finality: explorerStats.avgBlockTime,
+                  blockTime: NETWORK_STATS.blockTime,
+                })}
               </p>
             </div>
           </div>
@@ -299,8 +334,8 @@ export const OverviewView = () => {
       {/* Performance chart + specs */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Panel
-          title="Rendimiento de Red"
-          description="Throughput en tiempo real — datos del nodo conectado"
+          title={t("views.overview.perfTitle")}
+          description={t("views.overview.perfDesc")}
           className="lg:col-span-2"
         >
           <div className="flex items-start justify-between gap-4">
@@ -309,19 +344,25 @@ export const OverviewView = () => {
             </div>
             <div className="hidden shrink-0 flex-col gap-3 sm:flex">
               <div>
-                <p className="label-muted text-[10px]">TPS actual</p>
+                <p className="label-muted text-[10px]">
+                  {t("views.overview.tpsCurrent")}
+                </p>
                 <p className="mt-1 font-mono text-xl font-bold text-primary">
                   {explorerStats.tps.toLocaleString()}
                 </p>
               </div>
               <div>
-                <p className="label-muted text-[10px]">TPS objetivo</p>
+                <p className="label-muted text-[10px]">
+                  {t("views.overview.tpsTarget")}
+                </p>
                 <p className="mt-1 font-mono text-xl font-bold text-accent">
                   {NETWORK_STATS.tps.toLocaleString()}
                 </p>
               </div>
               <div>
-                <p className="label-muted text-[10px]">Fee promedio</p>
+                <p className="label-muted text-[10px]">
+                  {t("views.overview.avgFee")}
+                </p>
                 <p className="mt-1 font-mono text-xl font-bold text-foreground">
                   {explorerStats.avgFee}
                 </p>
@@ -331,38 +372,11 @@ export const OverviewView = () => {
         </Panel>
 
         <Panel
-          title="Especificaciones Técnicas"
-          description="Parámetros del protocolo"
+          title={t("views.overview.specsTitle")}
+          description={t("views.overview.specsDesc")}
         >
           <div className="space-y-3">
-            {[
-              {
-                label: "Tiempo de bloque",
-                value: NETWORK_STATS.blockTime,
-                icon: Clock,
-              },
-              {
-                label: "Finalidad",
-                value: NETWORK_STATS.finality,
-                icon: CheckCircle2,
-              },
-              {
-                label: "Latencia P2P",
-                value: NETWORK_STATS.latency,
-                icon: Network,
-              },
-              { label: "Costo por tx", value: NETWORK_STATS.txCost, icon: Zap },
-              {
-                label: "Energía por tx",
-                value: NETWORK_STATS.energyEfficiency,
-                icon: Gauge,
-              },
-              {
-                label: "Almacenamiento",
-                value: NETWORK_STATS.storage,
-                icon: Database,
-              },
-            ].map((spec) => {
+            {SPECS.map((spec) => {
               const Icon = spec.icon;
               return (
                 <div
@@ -390,8 +404,8 @@ export const OverviewView = () => {
 
       {/* Recent blocks feed */}
       <Panel
-        title="Bloques Recientes"
-        description="Últimos bloques producidos por la red"
+        title={t("views.overview.blocksTitle")}
+        description={t("views.overview.blocksDesc")}
       >
         <div className="space-y-2">
           {blocks.length > 0 ? (
@@ -421,7 +435,9 @@ export const OverviewView = () => {
                   </p>
                 </div>
                 <div className="hidden shrink-0 text-right sm:block">
-                  <p className="label-muted text-[9px]">Gas usado</p>
+                  <p className="label-muted text-[9px]">
+                    {t("views.overview.blockGasUsed")}
+                  </p>
                   <p className="font-mono text-[11px] font-bold text-foreground">
                     {block.gasUsed}
                   </p>
@@ -439,7 +455,7 @@ export const OverviewView = () => {
                 strokeWidth={1.5}
               />
               <p className="font-body text-xs text-muted-foreground">
-                Sin bloques recientes
+                {t("views.overview.blockNoRecent")}
               </p>
             </div>
           )}
