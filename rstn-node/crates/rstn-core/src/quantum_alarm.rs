@@ -183,7 +183,8 @@ impl QuantumAlarm {
         });
         if !filer_active {
             return Err(CoreError::Consensus(
-                "alarm report filed by non-active validator".into());
+                "alarm report filed by non-active validator".into(),
+            ));
         }
 
         // Dedup cosignatures and verify each.
@@ -194,7 +195,8 @@ impl QuantumAlarm {
             });
             if !signer_active {
                 return Err(CoreError::Consensus(
-                    "alarm cosignature from non-active validator".into());
+                    "alarm cosignature from non-active validator".into(),
+                ));
             }
             let pk = Dilithium3PublicKey(cosig.signer);
             let sig = Dilithium3Signature(cosig.signature);
@@ -220,7 +222,8 @@ impl QuantumAlarm {
     ) -> Result<(), CoreError> {
         if self.state == AlarmState::Normal {
             return Err(CoreError::Consensus(
-                "no active alarm report to cosign".into()));
+                "no active alarm report to cosign".into(),
+            ));
         }
         let report = self.active_report.as_mut().ok_or_else(|| {
             CoreError::Consensus("alarm state pending but no active report".into())
@@ -232,7 +235,8 @@ impl QuantumAlarm {
         });
         if !signer_active {
             return Err(CoreError::Consensus(
-                "cosign from non-active validator".into()));
+                "cosign from non-active validator".into(),
+            ));
         }
         // Verify the cosignature over the evidence hash.
         let pk = Dilithium3PublicKey(cosig.signer);
