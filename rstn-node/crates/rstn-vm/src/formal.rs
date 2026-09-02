@@ -25,7 +25,7 @@
 //!   - Equivalence to the Ethereum yellow paper (KEVM-style).
 //!   - Proof that the circuit breakers are sufficient for all reentrancy.
 
-use crate::{RstnVM, ExecutionResult, VmError};
+use crate::RstnVM;
 
 /// The maximum stack depth (matches EVM spec).
 pub const MAX_STACK: usize = 1024;
