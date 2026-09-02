@@ -43,7 +43,7 @@ STAKED_BEFORE=$(echo "$VALIDATORS_BEFORE" | python3 -c "
 import sys,json
 r=json.load(sys.stdin)
 vs=r.get('result',[])
-print(vs[0].get('staked','0') if vs else '0')
+print(vs[0].get('stake','0') if vs else '0')
 " 2>/dev/null || echo "0")
 echo "  Staked before: $STAKED_BEFORE"
 
@@ -83,7 +83,7 @@ STAKED_AFTER=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
 import sys,json
 r=json.load(sys.stdin)
 vs=r.get('result',[])
-print(vs[0].get('staked','0') if vs else '0')
+print(vs[0].get('stake','0') if vs else '0')
 " 2>/dev/null || echo "0")
 echo "  Staked after:  $STAKED_AFTER"
 

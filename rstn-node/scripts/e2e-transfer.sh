@@ -53,7 +53,7 @@ echo ""
 echo "[4/6] Recipient balance BEFORE transfer..."
 BAL_BEFORE=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
   -d "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"rstn_getBalance\",\"params\":[\"$RECIPIENT\"]}" \
-  | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('result',{}).get('available','0'))" 2>/dev/null || echo "0")
+  | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('result',{}).get('balance','0'))" 2>/dev/null || echo "0")
 echo "  Balance before: $BAL_BEFORE"
 
 # --- 5. Submit signed transfer --------------------------------------------
@@ -73,7 +73,7 @@ sleep 8
 
 BAL_AFTER=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
   -d "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"rstn_getBalance\",\"params\":[\"$RECIPIENT\"]}" \
-  | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('result',{}).get('available','0'))" 2>/dev/null || echo "0")
+  | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('result',{}).get('balance','0'))" 2>/dev/null || echo "0")
 echo "  Balance after:  $BAL_AFTER"
 
 if [ "$BAL_AFTER" != "$BAL_BEFORE" ]; then

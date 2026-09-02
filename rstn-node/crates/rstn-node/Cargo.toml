@@ -20,7 +20,7 @@ rstn-core.workspace = true
 rstn-crypto.workspace = true
 rstn-p2p.workspace = true
 rstn-vm.workspace = true
-rstn-rpc.workspace = true
+rstn-rpc = { workspace = true, features = ["debug-rpc"] }
 rstn-storage.workspace = true
 rstn-bridge.workspace = true
 rstn-sol-transpiler.workspace = true
