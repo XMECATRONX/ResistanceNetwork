@@ -181,6 +181,20 @@ pub async fn start_rpc_server(state: Arc<RpcState>, port: u16) {
     }
 }
 
+/// Compute the current staking ratio in basis points (0-10000) for the
+/// dynamic inflation multiplier. `staking_ratio_bps = total_staked * 10000 / total_supply`.
+/// If total_supply is 0 (genesis), returns 0 (max bonus — incentivize staking).
+fn compute_staking_ratio_bps(state: &Arc<RpcState>) -> u128 {
+    let total_staked: u128 = state.db.get_all_validators()
+        .unwrap_or_default()
+        .iter()
+        .map(|v| v.stake)
+        .sum();
+    let total_supply: u128 = 1_000_000_000_000_000_000u128; // 1B RSTN (18 decimals) — hard cap
+    if total_supply == 0 { return 0; }
+    (total_staked * 10000) / total_supply
+}
+
 /// Apply all state transitions for a block's transactions.
 ///
 /// This is the SINGLE source of truth for how transactions mutate state.
@@ -195,6 +209,7 @@ fn apply_block_transactions(
     state: &Arc<RpcState>,
     block: &rstn_core::Block,
     circuit_breaker: &mut rstn_core::circuit_breaker::CircuitBreaker,
+    current_base_fee: u128,
 ) -> usize {
     let height = block.header.height;
     let mut success_count = 0;
@@ -214,19 +229,40 @@ fn apply_block_transactions(
             continue;
         }
 
-        // Gas fee: debit sender, 50% burn + 50% validator reward
+        // Gas fee: EIP-1559 — base fee (burned) + tip (validator).
+        // The base fee is protocol-determined with a 1 gwei floor, so the
+        // burn never dies at scale (Ethereum's mistake — base fee without
+        // floor collapsed 96.5% in Jan 2026). The tip goes 100% to the
+        // validator, so the burn never competes with validator income
+        // (Solana's mistake — their 50% burn killed validators, reverted
+        // in SIMD-96 Feb 2025). Streams are separated by design.
+        //
+        // BUG FIX (audit round): the previous code hardcoded
+        // `rstn_core::fee_market::BASE_FEE_FLOOR` (a constant 1 gwei) for the
+        // burn split, so the dynamic base fee that ConsensusEngine adjusts per
+        // block (EIP-1559) never propagated to the actual burn — the floor was
+        // the only value ever used. Now we pass the engine's CURRENT dynamic
+        // base fee (which adjusts up on full blocks, down on empty blocks) and
+        // use the FeeMarket's split logic. The 1 gwei floor is still enforced
+        // inside FeeMarket, so the burn never dies.
+        let fm = rstn_core::fee_market::FeeMarket { base_fee: current_base_fee, last_block_gas: 0 };
         let mut tx_failed = false;
         if gas_fee > 0 {
             if let Err(e) = state.db.update_balance(&from_addr, -(gas_fee as i128)) {
                 tracing::warn!("Failed to debit gas in block {}: {}", height, e);
                 tx_failed = true;
             } else {
-                let burn_amount = gas_fee / 2;
-                let validator_reward = gas_fee - burn_amount;
+                let (burn_amount, validator_reward) = fm.split_fee(tx.gas_price, tx.gas_limit);
                 let validator_addr = rstn_crypto::derive_address(&block.header.validator);
                 let _ = state.db.update_balance(&validator_addr, validator_reward as i128);
+                // burn_amount is simply not credited to anyone — destroyed.
+                tracing::debug!(
+                    "Block {} tx: burn={} (base_fee {} gwei), validator_tip={}",
+                    height, burn_amount, current_base_fee / 1_000_000_000, validator_reward
+                );
             }
         }
+
 
         if !tx_failed {
             match tx.tx_type {
@@ -681,9 +717,20 @@ async fn try_catchup(
                     }
                 }
                 if !pre_applied.contains(&next_h) {
-                    let _processed = apply_block_transactions(state, &blk, &mut engine.circuit_breaker);
+                    let current_base_fee = engine.current_base_fee();
+                    let _processed = apply_block_transactions(state, &blk, &mut engine.circuit_breaker, current_base_fee);
                     let validator_addr = rstn_crypto::derive_address(&blk.header.validator);
-                    let block_reward: u128 = 100_000_000_000_000_000;
+                    // BUG FIX (audit): apply the dynamic inflation multiplier to
+                    // the block reward. The base reward is 0.1 RSTN (10^17 wei).
+                    // DynamicInflation targets 66% staked, capped at +2%: if the
+                    // network is under-staked, distribute up to 2% more to
+                    // incentivize staking (boosts security). The multiplier is
+                    // applied per-block so the reserve distribution tracks the
+                    // real staking ratio dynamically (fixes Cosmos' flat 20%).
+                    let staking_ratio_bps = compute_staking_ratio_bps(state);
+                    let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
+                    let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
+                    let block_reward = base_block_reward * multiplier_bps / 10000;
                     let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
                 } else {
                     pre_applied.remove(&next_h);
@@ -1040,7 +1087,7 @@ pub async fn start_block_production(
                                 let tx_count = block.transactions.len();
 
                                 // -- Apply state transitions (shared function) --
-                                let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker);
+                                let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, engine.current_base_fee());
 
                                 // -- Recompute state_root AFTER applying txs --
                                 // The block header's state_root should reflect the post-tx state.
@@ -1061,7 +1108,13 @@ pub async fn start_block_production(
                                 // Each block mints a small reward (0.1 RSTN = 10^17 wei) to the validator.
                                 // In production this comes from staking inflation, not minting.
                                 let validator_addr = rstn_crypto::derive_address(&block.header.validator);
-                                let block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN (18 decimals)
+                                // Dynamic inflation: apply the multiplier based on the current
+                                // staking ratio (targets 66%, capped at +2%). If under-staked, the
+                                // validator gets up to 2% more to incentivize staking.
+                                let staking_ratio_bps = compute_staking_ratio_bps(&state);
+                                let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
+                                let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
+                                let block_reward = base_block_reward * multiplier_bps / 10000;
                                 let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
 
                                 // -- Store block + txs --
@@ -1194,7 +1247,7 @@ pub async fn start_block_production(
                             let height = block.header.height;
 
                             // Apply state transitions on the leader's DB now
-                            let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker);
+                            let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, engine.current_base_fee());
 
                             // Recompute state_root AFTER applying txs (post-tx)
                             let post_state_root = compute_state_root(&state.db);
@@ -1212,7 +1265,10 @@ pub async fn start_block_production(
 
                             // Distribute block reward to the leader/validator
                             let validator_addr = rstn_crypto::derive_address(&block.header.validator);
-                            let block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
+                            let staking_ratio_bps = compute_staking_ratio_bps(&state);
+                            let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
+                            let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
+                            let block_reward = base_block_reward * multiplier_bps / 10000;
                             let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
 
                             let hash = hex::encode(new_hash);
@@ -1472,11 +1528,14 @@ pub async fn start_block_production(
                                                                     // Non-leaders apply the txs here for the first time so
                                                                     // their state matches the leader's post-tx state_root.
                                                                     if !pre_applied.contains(&height) {
-                                                                        let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker);
+                                                                        let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, engine.current_base_fee());
 
                                                                         // -- Distribute block reward to validator --
                                                                         let validator_addr = rstn_crypto::derive_address(&block.header.validator);
-                                                                        let block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
+                                                                        let staking_ratio_bps = compute_staking_ratio_bps(&state);
+                                                                        let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
+                                                                        let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
+                                                                        let block_reward = base_block_reward * multiplier_bps / 10000;
                                                                         let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
                                                                     } else {
                                                                         // Leader already applied -- just stop tracking this height
