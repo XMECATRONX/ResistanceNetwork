@@ -7,6 +7,7 @@ use tokio::time::{interval, Duration};
 use tokio::sync::mpsc;
 use rstn_rpc::{RpcState, RpcRequest, handle_rpc, check_rpc_rate_limit, validate_api_key, cors_allow_origin};
 use rstn_core::consensus::ConsensusEngine;
+use rstn_core::BftVotePhase;
 use rstn_storage::compute_state_root;
 // Note: rstn_bridge::BridgeState is used by the RPC layer, not directly here.
 use crate::network::{NetworkMessage, OutboundMessage};
@@ -1408,8 +1409,8 @@ pub async fn start_block_production(
                                 // block, check if any tx from our local mempool was
                                 // NOT included. If so, attest it as excluded so the
                                 // committee can force it into the next block (N+1).
-                                // This makes the claim "cualquier transacción
-                                // puede ser forzada al bloque en N+1" true.
+                                // This makes the claim "any transaction can be
+                                // forced into the block at N+1" true.
                                 if !engine.is_leader() {
                                     detect_and_attest_censored_txs(
                                         &mut engine, &block, &outbound,
@@ -1489,30 +1490,38 @@ pub async fn start_block_production(
                         tracing::info!("<< Received {:?} vote from {} for block #{} hash={}...",
                             vote.phase, &hex::encode(&vote.voter.0[..8]), height, &hex::encode(&block_hash[..8]));
 
-                        // Try to collect as prepare vote
-                        match engine.collect_prepare_vote(vote.clone()) {
-                            Ok(reached_supermajority) => {
-                                let count = engine.prepare_votes.get(&block_hash).map(|v| v.len()).unwrap_or(0);
-                                tracing::info!("PREPARE vote accepted ({} for #{}, need supermajority)", count, height);
-                                if reached_supermajority {
-                                    tracing::info!("PREPARE supermajority reached for block #{}", height);
+                        // Route the vote by phase. Previously we always tried
+                        // collect_prepare_vote first and fell back to
+                        // collect_commit_vote on error; that produced noisy
+                        // "PREPARE vote rejected (expected prepare-phase vote,
+                        // got commit-phase)" warnings for every commit vote.
+                        // Routing by vote.phase eliminates the spurious error
+                        // path entirely.
+                        match vote.phase {
+                            BftVotePhase::Prepare => {
+                                match engine.collect_prepare_vote(vote) {
+                                    Ok(reached_supermajority) => {
+                                        let count = engine.prepare_votes.get(&block_hash).map(|v| v.len()).unwrap_or(0);
+                                        tracing::info!("PREPARE vote accepted ({} for #{}, need supermajority)", count, height);
+                                        if reached_supermajority {
+                                            tracing::info!("PREPARE supermajority reached for block #{}", height);
 
-                                    // Vote commit
-                                    match engine.vote_commit(block_hash, height) {
-                                        Ok(commit_vote) => {
-                                            my_pending_votes.push(commit_vote.clone());
-                                            let _ = outbound.try_send(OutboundMessage::Vote(commit_vote));
+                                            // Vote commit
+                                            match engine.vote_commit(block_hash, height) {
+                                                Ok(commit_vote) => {
+                                                    my_pending_votes.push(commit_vote.clone());
+                                                    let _ = outbound.try_send(OutboundMessage::Vote(commit_vote));
+                                                }
+                                                Err(e) => tracing::warn!("Commit vote error: {}", e),
+                                            }
                                         }
-                                        Err(e) => tracing::warn!("Commit vote error: {}", e),
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("PREPARE vote rejected ({}): voter={} height={}", e, &hex::encode(&vote.voter.0[..8]), height);
                                     }
                                 }
                             }
-                            Err(e) => {
-                                // Prepare collection failed -- log WHY (not silently).
-                                // Could be: commit-phase vote, non-active validator, invalid
-                                // signature, or duplicate. Then try collecting as commit.
-                                tracing::warn!("PREPARE vote rejected ({}): voter={} height={}", e, &hex::encode(&vote.voter.0[..8]), height);
-                                // Maybe it's a commit vote -- try collecting as commit
+                            BftVotePhase::Commit => {
                                 match engine.collect_commit_vote(vote) {
                                     Ok(reached_supermajority) => {
                                         if reached_supermajority {
