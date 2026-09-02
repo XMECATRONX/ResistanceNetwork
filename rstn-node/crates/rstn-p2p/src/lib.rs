@@ -85,6 +85,15 @@ pub mod pq_transport_upgrade;
 /// becomes post-quantum — no identity-multihash bridge needed. The identity
 /// variant is the PR to `rust-libp2p`; the transport upgrade is already
 /// usable today via the bridge.
+///
+/// Gated behind the `pq-transport-fork` feature (off by default). The fork
+/// code depends on `multihash` APIs (`Code::Identity`) whose exact surface
+/// varies across the resolved multihash patch version. The swarm currently
+/// uses libp2p Noise (classical) with the PQ handshake layered at the
+/// application level (`pq_session`, `pq_wire`, `pq_broadcast`); this module
+/// is the future upstream-PR code, enabled when the fork is actually wired
+/// into `create_swarm`.
+#[cfg(feature = "pq-transport-fork")]
 pub mod libp2p_identity_pq;
 
 use libp2p::{
