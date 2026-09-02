@@ -13,7 +13,7 @@
 
 use crate::{
     Block, BlockHeader, BftVote, BftVotePhase, ConsensusState, CoreError,
-    Validator, ValidatorStatus, Transaction,
+    ValidatorStatus, Transaction,
     EPOCH_LENGTH,
 };
 use crate::forward_security::ForwardSecurityLedger;
