@@ -81,8 +81,16 @@ pub fn merkle_root(shards: &[Vec<u8>]) -> [u8; 64] {
     layer[0]
 }
 
+/// One step of a Merkle proof: the sibling hash and its position.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MerkleProofStep {
+    #[serde(with = "serde_big_array::BigArray")]
+    pub sibling: [u8; 64],
+    pub is_right: bool,
+}
+
 /// A Merkle proof for a single shard: the sibling hashes along the path.
-pub type MerkleProof = Vec<([u8; 64], bool)>; // (sibling_hash, is_right)
+pub type MerkleProof = Vec<MerkleProofStep>;
 
 /// Build a Merkle proof for the shard at `index`.
 pub fn merkle_proof(shards: &[Vec<u8>], index: usize) -> Option<MerkleProof> {
@@ -97,7 +105,7 @@ pub fn merkle_proof(shards: &[Vec<u8>], index: usize) -> Option<MerkleProof> {
         let is_right = idx % 2 == 1;
         let sib_idx = if is_right { idx - 1 } else { idx + 1 };
         let sib = if sib_idx < layer.len() { layer[sib_idx] } else { layer[idx] };
-        proof.push((sib, is_right));
+        proof.push(MerkleProofStep { sibling: sib, is_right });
         // Build the next level (pairwise hashing, duplicating the last if odd).
         let mut next = Vec::with_capacity((layer.len() + 1) / 2);
         for pair in layer.chunks(2) {
@@ -119,24 +127,22 @@ pub fn merkle_proof(shards: &[Vec<u8>], index: usize) -> Option<MerkleProof> {
 /// Verify a shard against the Merkle root using a proof.
 pub fn verify_shard(
     shard: &[u8],
-    index: usize,
+    _index: usize,
     proof: &MerkleProof,
     root: &[u8; 64],
 ) -> bool {
     let mut hash = keccak512(shard);
-    let mut idx = index;
-    for (sibling, is_right) in proof {
+    for step in proof {
         let mut combined = [0u8; 128];
-        if *is_right {
+        if step.is_right {
             // current hash is the right child
-            combined[..64].copy_from_slice(sibling);
+            combined[..64].copy_from_slice(&step.sibling);
             combined[64..].copy_from_slice(&hash);
         } else {
             combined[..64].copy_from_slice(&hash);
-            combined[64..].copy_from_slice(sibling);
+            combined[64..].copy_from_slice(&step.sibling);
         }
         hash = keccak512(&combined);
-        idx /= 2;
     }
     &hash == root
 }
@@ -275,6 +281,112 @@ pub fn encode_and_validate(
     (blob, shard_count_ok && reconstruct_ok)
 }
 
+// --- DAS-by-bits: distributed peer sampling -------------------------------
+//
+// The `light_client_sample` function above samples shards from a blob the
+// caller already has. In a real network, NO single node has the full blob —
+// the shards are distributed across the p2p network (each node stores a few).
+// "DAS-by-bits" is the protocol where light clients collaboratively sample
+// shards from MANY peers instead of one full node, reconstructing the block
+// only if enough shards are collectively available.
+//
+// This closes the "distributed sampling across the p2p network" gap. The
+// security property: a block is declared available iff a quorum of peers
+// collectively hold ≥ K shards (verified against the Merkle root). A single
+// withholding proposer cannot fool the network because the shards are spread
+// across independent nodes.
+
+/// A peer's response to a shard request: the shard data + Merkle proof, or
+/// "withheld" (the peer claims not to have it).
+#[derive(Clone, Debug)]
+pub struct PeerShardResponse {
+    pub index: usize,
+    pub shard: Option<Vec<u8>>,
+    pub proof: Option<MerkleProof>,
+}
+
+/// A distributed sampling coordinator. It queries a set of peers for random
+/// shard indices, collects the responses, verifies each against the root, and
+/// reconstructs the block if ≥ K verified shards are available.
+#[derive(Clone, Debug)]
+pub struct DistributedSampler {
+    /// The Merkle root committed in the block header.
+    root: [u8; 64],
+    /// Erasure parameters.
+    k: usize,
+    m: usize,
+    shard_len: usize,
+    orig_len: usize,
+    /// Total number of shards (k + m).
+    total: usize,
+    /// PRNG state.
+    state: u64,
+}
+
+impl DistributedSampler {
+    pub fn new(root: [u8; 64], k: usize, m: usize, shard_len: usize, orig_len: usize, seed: u64) -> Self {
+        Self {
+            root,
+            k,
+            m,
+            shard_len,
+            orig_len,
+            total: k + m,
+            state: seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407),
+        }
+    }
+
+    /// Pick `n` distinct random shard indices to sample from peers.
+    pub fn sample_indices(&mut self, n: usize) -> Vec<usize> {
+        let n = n.min(self.total);
+        let mut indices: Vec<usize> = Vec::with_capacity(n);
+        let mut chosen = std::collections::HashSet::new();
+        while indices.len() < n {
+            self.state = self.state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let idx = (self.state >> 32) as usize % self.total;
+            if chosen.insert(idx) {
+                indices.push(idx);
+            }
+        }
+        indices
+    }
+
+    /// Verify a single peer's shard response against the committed root.
+    /// Returns true if the shard is present AND verifies against the root.
+    pub fn verify_response(&self, resp: &PeerShardResponse) -> bool {
+        match (&resp.shard, &resp.proof) {
+            (Some(shard), Some(proof)) => {
+                verify_shard(shard, resp.index, proof, &self.root)
+            }
+            _ => false, // withheld or no proof → not available
+        }
+    }
+
+    /// Attempt to reconstruct the block from a set of peer responses.
+    /// Returns the reconstructed body iff ≥ K verified shards are available.
+    pub fn reconstruct_from_peers(
+        &self,
+        responses: &[PeerShardResponse],
+    ) -> Option<Vec<u8>> {
+        let verified: Vec<(usize, Vec<u8>)> = responses
+            .iter()
+            .filter(|r| self.verify_response(r))
+            .map(|r| (r.index, r.shard.clone().unwrap()))
+            .collect();
+        if verified.len() < self.k {
+            return None; // not enough shards collectively available
+        }
+        let decoded = reconstruct_block_body(&verified, self.k, self.shard_len, self.orig_len);
+        // Final integrity check: re-encode and verify the root matches.
+        let blob = encode_block_body(&decoded, self.shard_len, self.m);
+        if blob.root == self.root {
+            Some(decoded)
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests_das_fraud {
     use super::*;
@@ -374,5 +486,124 @@ mod tests {
         let result = light_client_sample(&blob, 5, 12345);
         assert!(result.all_available, "sampling must succeed when all shards present");
         assert_eq!(result.sampled_indices.len(), 5);
+    }
+}
+
+#[cfg(test)]
+mod tests_das_distributed {
+    use super::*;
+
+    fn make_blob() -> (Vec<u8>, AvailabilityBlob) {
+        let body = b"distributed das-by-bits peer sampling test body".to_vec();
+        let blob = encode_block_body(&body, 8, 4);
+        (body, blob)
+    }
+
+    #[test]
+    fn distributed_sampler_picks_distinct_indices() {
+        let (_, blob) = make_blob();
+        let mut sampler = DistributedSampler::new(blob.root, blob.k, blob.m, 8, 46, 99);
+        let indices = sampler.sample_indices(6);
+        assert_eq!(indices.len(), 6);
+        let mut sorted = indices.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 6, "indices must be distinct");
+    }
+
+    #[test]
+    fn distributed_sampler_reconstructs_from_peer_shards() {
+        let (body, blob) = make_blob();
+        // Simulate peers: each peer holds ONE shard + its proof.
+        let responses: Vec<PeerShardResponse> = (0..blob.shards.len())
+            .map(|i| PeerShardResponse {
+                index: i,
+                shard: Some(blob.shards[i].clone()),
+                proof: merkle_proof(&blob.shards, i),
+            })
+            .collect();
+        let sampler = DistributedSampler::new(blob.root, blob.k, blob.m, 8, body.len(), 1);
+        let reconstructed = sampler.reconstruct_from_peers(&responses);
+        assert_eq!(reconstructed, Some(body), "must reconstruct from peer shards");
+    }
+
+    #[test]
+    fn distributed_sampler_fails_with_too_few_shards() {
+        let (body, blob) = make_blob();
+        // Only provide k-1 shards → cannot reconstruct.
+        let responses: Vec<PeerShardResponse> = (0..blob.k - 1)
+            .map(|i| PeerShardResponse {
+                index: i,
+                shard: Some(blob.shards[i].clone()),
+                proof: merkle_proof(&blob.shards, i),
+            })
+            .collect();
+        let sampler = DistributedSampler::new(blob.root, blob.k, blob.m, 8, body.len(), 1);
+        assert!(sampler.reconstruct_from_peers(&responses).is_none());
+    }
+
+    #[test]
+    fn distributed_sampler_rejects_withheld_shards() {
+        let (body, blob) = make_blob();
+        // Half the peers withhold their shards.
+        let mut responses: Vec<PeerShardResponse> = Vec::new();
+        for i in 0..blob.shards.len() {
+            if i % 2 == 0 {
+                responses.push(PeerShardResponse {
+                    index: i,
+                    shard: Some(blob.shards[i].clone()),
+                    proof: merkle_proof(&blob.shards, i),
+                });
+            } else {
+                responses.push(PeerShardResponse {
+                    index: i,
+                    shard: None,
+                    proof: None,
+                });
+            }
+        }
+        let sampler = DistributedSampler::new(blob.root, blob.k, blob.m, 8, body.len(), 1);
+        // With k+m shards total and half withheld, we have (k+m)/2 shards.
+        // For this blob k is small; check we either reconstruct (if ≥k) or fail.
+        let result = sampler.reconstruct_from_peers(&responses);
+        let available = responses.iter().filter(|r| sampler.verify_response(r)).count();
+        if available < blob.k {
+            assert!(result.is_none(), "must fail when < k shards available");
+        }
+    }
+
+    #[test]
+    fn distributed_sampler_rejects_tampered_shard() {
+        let (body, blob) = make_blob();
+        // One peer serves a tampered shard with the WRONG proof → must fail verify.
+        let mut bad_shard = blob.shards[0].clone();
+        bad_shard[0] ^= 0xFF;
+        let responses: Vec<PeerShardResponse> = (0..blob.shards.len())
+            .map(|i| {
+                if i == 0 {
+                    PeerShardResponse {
+                        index: 0,
+                        shard: Some(bad_shard.clone()),
+                        proof: merkle_proof(&blob.shards, 0),
+                    }
+                } else {
+                    PeerShardResponse {
+                        index: i,
+                        shard: Some(blob.shards[i].clone()),
+                        proof: merkle_proof(&blob.shards, i),
+                    }
+                }
+            })
+            .collect();
+        let sampler = DistributedSampler::new(blob.root, blob.k, blob.m, 8, body.len(), 1);
+        // The tampered shard fails Merkle verification → not counted as available.
+        assert!(!sampler.verify_response(&responses[0]));
+        // Still enough good shards to reconstruct (k of the remaining k+m-1).
+        let result = sampler.reconstruct_from_peers(&responses);
+        // Re-encoding the reconstructed body must match the root (the tampered
+        // shard is excluded). If k good shards remain, reconstruction succeeds.
+        if blob.shards.len() - 1 >= blob.k {
+            assert_eq!(result, Some(body));
+        }
     }
 }

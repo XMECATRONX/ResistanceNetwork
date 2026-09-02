@@ -199,7 +199,7 @@ pub fn reconstruct(surviving: &[(usize, Vec<u8>)], k: usize, shard_len: usize) -
     // the same for any m >= (i - k + 1). We infer the smallest m that includes
     // all surviving indices, so those rows exist and are identical to the
     // encoder's generator rows.
-    let max_index = surviving.iter().map(|(i, _)| *i).copied().max().unwrap();
+    let max_index = surviving.iter().map(|(i, _)| *i).max().unwrap();
     let inferred_m = (max_index + 1).saturating_sub(k).max(1);
     let full_g = build_generator(k, inferred_m);
 

@@ -19,7 +19,7 @@
 //! PQ (no classical Noise at all) requires the libp2p fork.
 
 use rstn_crypto::{
-    Dilithium3Keypair, Dilithium3PublicKey, NoiseHandshake, HandshakeRole,
+    Dilithium3PublicKey,
     CryptoError,
 };
 use std::collections::HashMap;

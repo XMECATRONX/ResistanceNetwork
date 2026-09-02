@@ -41,6 +41,28 @@ use rstn_crypto::{
 
 use crate::{Validator, ValidatorStatus, CoreError};
 
+// serde_big_array only works on [T; N], not Vec<[T; N]>. This module provides
+// serde for Vec<[u8; PUBKEY_SIZE]> by wrapping each element in a BigArray-compatible
+// struct.
+mod big_pubkey_vec {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde_big_array::BigArray;
+    use rstn_crypto::PUBKEY_SIZE;
+
+    #[derive(Serialize, Deserialize)]
+    struct Wrapper(#[serde(with = "BigArray")] [u8; PUBKEY_SIZE]);
+
+    pub fn serialize<S: Serializer>(v: &Vec<[u8; PUBKEY_SIZE]>, s: S) -> Result<S::Ok, S::Error> {
+        let wrappers: Vec<Wrapper> = v.iter().map(|a| Wrapper(*a)).collect();
+        wrappers.serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<[u8; PUBKEY_SIZE]>, D::Error> {
+        let wrappers: Vec<Wrapper> = Deserialize::deserialize(d)?;
+        Ok(wrappers.into_iter().map(|w| w.0).collect())
+    }
+}
+
 /// A forward-secure commitment: the validator commits to the public key it
 /// will use in the NEXT epoch, without revealing it (only its hash).
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,7 +117,7 @@ pub struct ForwardSecurityLedger {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpochKeySet {
     pub epoch: u64,
-    #[serde(with = "BigArray")]
+    #[serde(with = "big_pubkey_vec")]
     pub keys: Vec<[u8; PUBKEY_SIZE]>,
 }
 

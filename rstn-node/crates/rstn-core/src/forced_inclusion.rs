@@ -55,6 +55,7 @@ pub struct InclusionAttestation {
     /// Height at which the tx was seen in the regular mempool but excluded.
     pub excluded_at_height: u64,
     /// The tx commitment (Keccak-512 of the tx).
+    #[serde(with = "serde_big_array::BigArray")]
     pub tx_commitment: TxCommitment,
     /// The validator's public key.
     pub validator: Dilithium3PublicKey,
@@ -134,12 +135,13 @@ impl ForcedInclusionPool {
         if already {
             return false;
         }
+        let commitment = attestation.tx_commitment;
         entry.attestations.push(attestation);
         // Check if we crossed the threshold.
         let count = entry.attestations.len();
         if count == threshold {
             // Newly forced — add to FIFO order.
-            self.order.push_back(attestation.tx_commitment);
+            self.order.push_back(commitment);
             return true;
         }
         false

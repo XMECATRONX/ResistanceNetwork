@@ -292,11 +292,11 @@ impl QuantumAlarm {
         self.state == AlarmState::Emergency
     }
 
-    /// Clearing the alarm requires governance — this module deliberately
-    /// provides NO method to revert Emergency. Reverting is a hard fork
-    /// decided by governance, not a runtime call. This is the "no admin
-    /// key" guarantee: once Emergency is declared, no single party can
-    /// silently undo it.
+    // Clearing the alarm requires governance — this module deliberately
+    // provides NO method to revert Emergency. Reverting is a hard fork
+    // decided by governance, not a runtime call. This is the "no admin
+    // key" guarantee: once Emergency is declared, no single party can
+    // silently undo it.
 }
 
 #[cfg(test)]

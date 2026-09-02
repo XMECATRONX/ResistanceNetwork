@@ -12,9 +12,9 @@
 //! key is not in the authorized set.
 
 use crate::{
-    Block, BlockHeader, BftProposal, BftVote, BftVotePhase, ConsensusState, CoreError,
-    Validator, ValidatorStatus, Transaction, TxType,
-    EPOCH_LENGTH, TARGET_BLOCK_TIME_MS,
+    Block, BlockHeader, BftVote, BftVotePhase, ConsensusState, CoreError,
+    Validator, ValidatorStatus, Transaction,
+    EPOCH_LENGTH,
 };
 use crate::forward_security::ForwardSecurityLedger;
 use rstn_crypto::{Dilithium3Keypair, Dilithium3Signature, Dilithium3PublicKey, keccak512, SIG_SIZE};
@@ -95,6 +95,17 @@ pub struct ConsensusEngine {
     /// after which Dilithium3-only signatures are rejected. The runner
     /// checks `is_emergency()` at finalization to enforce the fallback.
     pub quantum_alarm: crate::quantum_alarm::QuantumAlarm,
+    /// EIP-1559 fee market v3 (base fee burned + tip to validator + dynamic
+    /// inflation). The runner calls `fee_market.split_fee()` for each tx to
+    /// compute the burn (base fee) and the validator tip — two SEPARATE
+    /// streams that do not compete (fixes Solana's error). The base fee is
+    /// floored at 1 gwei so the burn never dies at scale (fixes Ethereum's
+    /// error). `update_after_block()` is called after each block to adjust.
+    pub fee_market: crate::fee_market::FeeMarket,
+    /// Dynamic inflation targeting 66% staked, capped at 2% (fixes Cosmos'
+    /// 20% dilution). The runner feeds the current staking ratio and the
+    /// multiplier adjusts the reserve distribution schedule.
+    pub dynamic_inflation: crate::fee_market::DynamicInflation,
 }
 
 impl ConsensusEngine {
@@ -115,7 +126,29 @@ impl ConsensusEngine {
             encrypted_txs: Vec::new(),
             circuit_breaker: crate::circuit_breaker::CircuitBreaker::new(),
             quantum_alarm: crate::quantum_alarm::QuantumAlarm::new(),
+            fee_market: crate::fee_market::FeeMarket::new(),
+            dynamic_inflation: crate::fee_market::DynamicInflation::new(),
         }
+    }
+
+    /// EIP-1559 v3 — Returns the current base fee (floored at 1 gwei) for
+    /// RPC display and wallet fee estimation.
+    pub fn current_base_fee(&self) -> u128 {
+        self.fee_market.current_base_fee()
+    }
+
+    /// EIP-1559 v3 — Split a tx's fee into burn (base fee, 100% destroyed)
+    /// and tip (100% to validator). Streams are independent — the burn does
+    /// not reduce the validator's tip (fixes Solana's error).
+    pub fn split_tx_fee(&self, gas_price: u128, gas_limit: u64) -> (u128, u128) {
+        self.fee_market.split_fee(gas_price, gas_limit)
+    }
+
+    /// Dynamic inflation v3 — Compute the reserve distribution multiplier
+    /// for the current staking ratio. Targets 66% staked, capped at +2%
+    /// (fixes Cosmos' 20% dilution). Returns basis points (10000 = 1.0×).
+    pub fn inflation_multiplier(&self, staking_ratio_bps: u128) -> u128 {
+        self.dynamic_inflation.rate_multiplier(staking_ratio_bps)
     }
 
     /// G14 — Enable the forced-inclusion pool with the current validator set.
@@ -495,6 +528,29 @@ impl ConsensusEngine {
             header,
             transactions: txs,
         };
+
+        // EIP-1559 v3: compute the total gas used by this block and split
+        // each tx's fee into burn (base fee) + tip (validator). The burn is
+        // 100% destroyed; the tip goes 100% to the block's validator. These
+        // are SEPARATE streams — the burn does not reduce the validator's tip
+        // (fixes Solana's error). The base fee is floored at 1 gwei so the
+        // burn never dies at scale (fixes Ethereum's error).
+        let block_gas_used: u64 = block.transactions.iter().map(|tx| tx.gas_limit).sum();
+        let mut total_burned: u128 = 0;
+        let mut total_tip: u128 = 0;
+        for tx in &block.transactions {
+            let (burn, tip) = self.fee_market.split_fee(tx.gas_price, tx.gas_limit);
+            total_burned = total_burned.saturating_add(burn);
+            total_tip = total_tip.saturating_add(tip);
+        }
+        tracing::info!(
+            "EIP-1559 v3 block {}: gas_used={}, burned={} (base fee, floor={} gwei), validator_tip={} (separate stream)",
+            block.header.height, block_gas_used,
+            total_burned, self.fee_market.current_base_fee() / 1_000_000_000,
+            total_tip,
+        );
+        // Adjust the base fee for the NEXT block based on this block's fullness.
+        self.fee_market.update_after_block(block_gas_used);
 
         // Leader signs the block
         let block_hash = block.hash();
