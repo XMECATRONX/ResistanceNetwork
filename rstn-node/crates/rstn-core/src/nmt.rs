@@ -262,6 +262,50 @@ fn collect_path_siblings(
     }
 }
 
+/// Custom serde for `Vec<(usize, [u8; NODE_LEN], bool)>`. serde's derive
+/// cannot handle `[u8; 64]` (arrays > 32 need `BigArray`), and `BigArray`
+/// only works on bare `[T; N]`, not tuples. This module wraps each sibling
+/// in a struct with a `#[serde(with = "BigArray")]` field.
+mod siblings_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde_big_array::BigArray;
+
+    use super::NODE_LEN;
+
+    #[derive(Serialize, Deserialize)]
+    struct SiblingWrapper {
+        layer: usize,
+        #[serde(with = "BigArray")]
+        node: [u8; NODE_LEN],
+        is_right: bool,
+    }
+
+    pub fn serialize<S: Serializer>(
+        v: &[(usize, [u8; NODE_LEN], bool)],
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
+        let wrappers: Vec<SiblingWrapper> = v
+            .iter()
+            .map(|(layer, node, is_right)| SiblingWrapper {
+                layer: *layer,
+                node: *node,
+                is_right: *is_right,
+            })
+            .collect();
+        wrappers.serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<Vec<(usize, [u8; NODE_LEN], bool)>, D::Error> {
+        let wrappers = Vec::<SiblingWrapper>::deserialize(d)?;
+        Ok(wrappers
+            .into_iter()
+            .map(|w| (w.layer, w.node, w.is_right))
+            .collect())
+    }
+}
+
 /// A namespace proof: the matched leaves + the sibling nodes needed to verify
 /// inclusion and completeness.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -270,6 +314,7 @@ pub struct NamespaceProof {
     pub leaves: Vec<NmtLeaf>,
     /// (layer_index, sibling_node, is_right) for each sibling on the boundary
     /// and interior paths.
+    #[serde(with = "siblings_serde")]
     pub siblings: Vec<(usize, [u8; NODE_LEN], bool)>,
     /// The starting leaf index of the matched range.
     pub start_index: usize,
@@ -312,7 +357,7 @@ impl NamespaceProof {
 
         // 3. Recompute the root from the leaves + siblings.
         //    We rebuild the leaf layer from the proof leaves, then walk up.
-        let mut current: Vec<[u8; NODE_LEN]> =
+        let current: Vec<[u8; NODE_LEN]> =
             self.leaves.iter().map(|l| l.node_hash()).collect();
 
         // We cannot fully recompute the root from only the matched leaves
