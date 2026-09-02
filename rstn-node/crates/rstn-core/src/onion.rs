@@ -310,11 +310,12 @@ impl MixBatch {
             // Epoch boundary crossed → flush the batch in randomized order.
             self.shuffle_buffer();
             let boundary = curr_epoch * self.epoch_secs;
-            let released: Vec<ReleasedMessage> = self
-                .buffer
-                .drain(..)
-                .enumerate()
-                .map(|(_i, msg)| {
+            // Drain into a local vec first so the closure does not borrow
+            // `self.buffer` while also calling `self.next_f64()`.
+            let drained: Vec<BufferedMessage> = self.buffer.drain(..).collect();
+            let released: Vec<ReleasedMessage> = drained
+                .into_iter()
+                .map(|msg| {
                     let jitter = self.next_f64() * self.max_jitter;
                     ReleasedMessage {
                         next_hop: msg.next_hop,
