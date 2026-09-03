@@ -361,6 +361,16 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         // Lets the dashboard show which addresses are paused and why.
         "rstn_getCircuitBreakers" => get_circuit_breakers(state).await,
 
+        // -- Geographic Validator Cap (G11) ----------------
+        // Returns the per-region stake distribution + which regions are over
+        // the 15% cap. Lets the dashboard show geographic decentralization.
+        "rstn_getGeoReport" => get_geo_report(state).await,
+
+        // -- Distributed DAS (G3-complete) -----------------
+        // Returns the erasure-coded shards + Merkle proofs for a block so a
+        // light client can sample and reconstruct via DAS-by-bits.
+        "rstn_getDasShards" => get_das_shards(state, req.params.first()).await,
+
         // -- Unknown ---------------------------------------
         _ => Err(RpcError::MethodNotFound(req.method.clone())),
     };
@@ -2857,5 +2867,51 @@ async fn get_circuit_breakers(state: &RpcState) -> Result<Value, RpcError> {
     Ok(serde_json::json!({
         "trips": trip_json,
         "healthy": cb.is_healthy(),
+    }))
+}
+
+/// G11 — Geographic validator cap report.
+/// Returns the per-region stake distribution + which regions exceed the 15% cap.
+async fn get_geo_report(state: &RpcState) -> Result<Value, RpcError> {
+    let validators = state.db.get_all_validators()
+        .map_err(|e| RpcError::Internal(e.to_string()))?;
+    let report = rstn_core::geo_cap::geo_report(&validators);
+    Ok(serde_json::json!({
+        "capPct": report.cap_pct,
+        "overCap": report.over_cap,
+        "regions": report.regions,
+    }))
+}
+
+/// G3-complete — Distributed DAS shards for a block.
+/// Returns the erasure-coded shards + Merkle root so a light client can
+/// sample random shards and reconstruct via DAS-by-bits.
+async fn get_das_shards(state: &RpcState, params: Option<&Value>) -> Result<Value, RpcError> {
+    let height = params
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| RpcError::InvalidParams("missing height".into()))?;
+    let block = state.db.get_block(height)
+        .map_err(|e| RpcError::Internal(e.to_string()))?
+        .ok_or_else(|| RpcError::InvalidParams(format!("block #{} not found", height)))?;
+    let body = serde_json::to_vec(&block.transactions)
+        .map_err(|e| RpcError::Internal(e.to_string()))?;
+    let blob = rstn_core::das::encode_block_body(&body, 256, 4);
+    // Build Merkle proofs for each shard so a light client can verify any
+    // sampled shard against the committed data_root.
+    let shards: Vec<Value> = (0..blob.shards.len()).map(|i| {
+        let proof = rstn_core::das::merkle_proof(&blob.shards, i);
+        serde_json::json!({
+            "index": i,
+            "shard": hex::encode(&blob.shards[i]),
+            "proof": proof.map(|p| serde_json::to_value(&p).unwrap_or(Value::Null)),
+        })
+    }).collect();
+    Ok(serde_json::json!({
+        "height": height,
+        "dataRoot": hex::encode(blob.root),
+        "k": blob.k,
+        "m": blob.m,
+        "shardCount": blob.shards.len(),
+        "shards": shards,
     }))
 }

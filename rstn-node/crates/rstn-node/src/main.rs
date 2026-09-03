@@ -17,6 +17,7 @@ use tracing_subscriber::EnvFilter;
 mod config;
 mod network;
 mod runner;
+mod das_wire;
 
 use rstn_core::{
     GenesisConfig, ConsensusState, genesis, Validator, ValidatorStatus,
@@ -379,6 +380,11 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
                 uptime: 1.0,
                 blocks_produced: 0,
                 status: ValidatorStatus::Active,
+                // G11 — assign a region to each validator for the geographic
+                // cap. In a real deployment each operator self-declares; for
+                // the local testnet we distribute across regions round-robin
+                // so the geo-cap monitoring is observably live.
+                region: ["us-east", "eu-west", "asia-east", "sa-east"][i % 4].to_string(),
             };
             let vaddr = rstn_crypto::derive_address(&validator.pubkey);
             consensus.validators.push(validator.clone());
@@ -400,6 +406,7 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
             uptime: 1.0,
             blocks_produced: 0,
             status: ValidatorStatus::Active,
+            region: "us-east".to_string(),
         };
         consensus.validators.push(validator.clone());
         let addr_bytes = rstn_crypto::derive_address(&keypair.public);

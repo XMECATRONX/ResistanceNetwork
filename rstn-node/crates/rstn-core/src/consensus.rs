@@ -17,7 +17,7 @@ use crate::{
     EPOCH_LENGTH,
 };
 use crate::forward_security::ForwardSecurityLedger;
-use rstn_crypto::{Dilithium3Keypair, Dilithium3Signature, Dilithium3PublicKey, keccak512, SIG_SIZE};
+use rstn_crypto::{Dilithium3Keypair, Dilithium3Signature, Dilithium3PublicKey, keccak512, SIG_SIZE, VrfKeypair, VrfOutput, VrfProof, verify_vrf};
 use std::collections::HashMap;
 
 /// BFT phases in order.
@@ -70,8 +70,8 @@ pub struct ConsensusEngine {
     /// active validator set attests it was excluded from block N. The
     /// proposer of block N+1 MUST include all forced txs (up to the gas
     /// budget) or the block is invalid — censorship of a forced tx is a
-    /// protocol violation. This makes the claim "cualquier transacción
-    /// puede ser forzada al bloque en N+1 si fue censurada en N" true.
+    /// protocol violation. This makes the claim "any transaction can be
+    /// forced into the block at N+1 if it was censored at N" true.
     pub forced_pool: crate::forced_inclusion::ForcedInclusionPool,
     /// G13 — Threshold-encrypted mempool. When enabled, the proposer sees
     /// only the commitment (hash) of each tx, not the payload. The payload
@@ -510,6 +510,14 @@ impl ConsensusEngine {
         let das_blob = crate::das::encode_block_body(&body_bytes, 256, 4);
         let data_root = das_blob.root;
 
+        // PQ-VRF leader election: evaluate VRF(secret, parent_hash || height)
+        // and commit the output + proof to the block header. The VRF output
+        // determines the leader for the NEXT block (chain-VRF, Algorand-style).
+        let vrf_kp = VrfKeypair::from_dilithium(&self.keypair);
+        let mut vrf_input = parent.hash().to_vec();
+        vrf_input.extend_from_slice(&(parent.header.height + 1).to_le_bytes());
+        let (vrf_output, vrf_proof) = vrf_kp.evaluate(&vrf_input);
+
         let header = BlockHeader {
             height: parent.header.height + 1,
             parent_hash: parent.hash(),
@@ -522,6 +530,8 @@ impl ConsensusEngine {
             epoch: (parent.header.height + 1) / EPOCH_LENGTH,
             round: self.state.current_round,
             data_root,
+            vrf_output: vrf_output.0,
+            vrf_proof: Dilithium3Signature(vrf_proof.0),
         };
 
         let mut block = Block {
@@ -572,6 +582,21 @@ impl ConsensusEngine {
             // an authorized key for the block's epoch. An attacker who bought
             // a retired epoch key cannot propose or vote on a new-epoch block.
             self.validate_forward_security(proposal.header.epoch, &proposal.header.validator)?;
+            // PQ-VRF leader election: verify the leader's VRF proof. The leader
+            // must have correctly evaluated VRF(secret, parent_hash || height)
+            // and committed the output. A forged or invalid VRF is rejected --
+            // only the secret key holder can produce a valid proof.
+            let mut vrf_input = proposal.header.parent_hash.to_vec();
+            vrf_input.extend_from_slice(&proposal.header.height.to_le_bytes());
+            verify_vrf(
+                &proposal.header.validator,
+                &vrf_input,
+                &VrfOutput(proposal.header.vrf_output),
+                &VrfProof(proposal.header.vrf_proof.0),
+            )
+            .map_err(|_| CoreError::InvalidBlock(
+                "VRF proof invalid: leader did not correctly evaluate the VRF".to_string(),
+            ))?;
         }
 
         // Verify the proposal header

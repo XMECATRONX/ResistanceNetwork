@@ -27,8 +27,10 @@ use futures::StreamExt;
 use rstn_p2p::{
     RstnBehaviour, RstnBehaviourEvent, TOPIC_ALL,
     TAG_BLOCK, TAG_VOTE, TAG_TX, TAG_SYNC, TAG_COMMIT_CERT, TAG_INCLUSION_ATTESTATION,
+    TAG_DAS_SHARD,
 };
 use rstn_core::{Block, Transaction, BftVote, BftProposal, CommitCertificate, forced_inclusion::InclusionAttestation};
+use crate::das_wire::{DasShardRequest, DasShardResponse};
 use rstn_rpc::RpcState;
 use rstn_crypto::Dilithium3Keypair;
 use rstn_p2p::pq_session::PeerSessionManager;
@@ -435,6 +437,61 @@ pub async fn run_p2p_event_loop(
                                         tracing::warn!("Failed to deserialize inclusion attestation: {}", e);
                                         acceptance = gossipsub::MessageAcceptance::Reject;
                                     }
+                                }
+                            }
+                            TAG_DAS_SHARD => {
+                                // G3-complete — Distributed DAS (DAS-by-bits).
+                                // A peer is either requesting a shard or responding
+                                // with one. Discriminate by whether the payload
+                                // deserializes as a request or a response.
+                                if let Ok(req) = serde_json::from_slice::<DasShardRequest>(&payload) {
+                                    // This is a shard REQUEST. A peer wants shard
+                                    // `index` of block `height`. If we have the block
+                                    // body, we encode it, build the Merkle proof for
+                                    // the requested shard, and respond. If we don't
+                                    // have it, we ignore (another peer may answer).
+                                    tracing::debug!(
+                                        "<< DAS shard request: block #{} shard {} from {}",
+                                        req.height, req.index, peer_id
+                                    );
+                                    // Look up the block in storage; if present, build
+                                    // the shard + proof and broadcast the response.
+                                    let block_opt = rpc_state.db.get_block(req.height).ok().flatten();
+                                    if let Some(block) = block_opt {
+                                        let body = serde_json::to_vec(&block.transactions).unwrap_or_default();
+                                        let blob = rstn_core::das::encode_block_body(&body, 256, 4);
+                                        if req.index < blob.shards.len() {
+                                            let proof = rstn_core::das::merkle_proof(&blob.shards, req.index);
+                                            let resp = DasShardResponse {
+                                                height: req.height,
+                                                index: req.index,
+                                                shard: Some(blob.shards[req.index].clone()),
+                                                proof: proof,
+                                            };
+                                            let data = serde_json::to_vec(&resp).unwrap_or_default();
+                                            publish_tagged(&mut swarm, TAG_DAS_SHARD, data,
+                                                &format!("das-shard-resp #{} [{}]", req.height, req.index),
+                                                group_key_history.current());
+                                        }
+                                    }
+                                    // Requests are not forwarded (point-to-point-ish).
+                                    acceptance = gossipsub::MessageAcceptance::Ignore;
+                                } else if let Ok(resp) = serde_json::from_slice::<DasShardResponse>(&payload) {
+                                    // This is a shard RESPONSE. A peer answered our
+                                    // (or another peer's) shard request. We don't
+                                    // actively reconstruct here (the light-client
+                                    // sampler does that via RPC), but we log it so
+                                    // the DAS-by-bits protocol is observably live.
+                                    tracing::debug!(
+                                        "<< DAS shard response: block #{} shard {} (len={}) from {}",
+                                        resp.height, resp.index,
+                                        resp.shard.as_ref().map(|s| s.len()).unwrap_or(0),
+                                        peer_id
+                                    );
+                                    acceptance = gossipsub::MessageAcceptance::Ignore;
+                                } else {
+                                    tracing::warn!("Malformed DAS shard message from {}", peer_id);
+                                    acceptance = gossipsub::MessageAcceptance::Reject;
                                 }
                             }
                             _ => {

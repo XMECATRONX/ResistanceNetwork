@@ -20,6 +20,8 @@ pub mod threshold_mempool; // G13 -- threshold-encrypted mempool (MEV eliminatio
 pub mod forced_inclusion;  // G14 -- forced-inclusion pool (censorship resistance N+1)
 pub mod zk_stark;      // G15 -- zk-STARK foundation (hash-based, no trusted setup, PQ-resistant)
 pub mod nmt;           // G3-complete -- Namespaced Merkle Trees for application-level DAS
+pub mod geo_cap;       // G11 -- Geographic validator cap (on-chain region monitoring)
+pub mod directory_authority; // G6-complete -- Directory authority for the onion mixnet
 pub mod fee_market;    // EIP-1559 fee market (base fee burned + tip to validator + dynamic inflation)
 
 use serde::{Deserialize, Serialize};
@@ -27,7 +29,7 @@ use serde_big_array::BigArray;
 use thiserror::Error;
 use rstn_crypto::{
     keccak512, Dilithium3Signature, Dilithium3PublicKey, format_address, derive_address,
-    PUBKEY_SIZE, ADDRESS_SIZE,
+    PUBKEY_SIZE, ADDRESS_SIZE, SIG_SIZE,
     HybridPublicKey, HybridSignature, verify_hybrid_signature,
 };
 
@@ -75,10 +77,26 @@ pub struct BlockHeader {
     /// the genesis block (no body to encode).
     #[serde(with = "BigArray", default = "zero_hash64")]
     pub data_root: [u8; 64],
+    /// PQ-VRF output for leader election. The block's leader evaluates
+    /// VRF(secret, parent_hash || height) and commits the output + proof.
+    /// The next block's leader = validators[output % active_count],
+    /// making leader election unpredictable yet deterministic (chain-VRF).
+    /// Zero for genesis (no real leader to evaluate the VRF).
+    #[serde(with = "BigArray", default = "zero_hash64")]
+    pub vrf_output: [u8; 64],
+    /// PQ-VRF proof (Dilithium3 signature on the VRF input). Lets any
+    /// validator verify the leader's VRF output was correctly computed.
+    /// Zero for genesis.
+    #[serde(default = "zero_sig")]
+    pub vrf_proof: Dilithium3Signature,
 }
 
 fn zero_hash64() -> [u8; 64] {
     [0u8; 64]
+}
+
+fn zero_sig() -> Dilithium3Signature {
+    Dilithium3Signature([0u8; SIG_SIZE])
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -93,7 +111,7 @@ impl BlockHeader {
     /// Fields are encoded in fixed order, little-endian, ensuring that
     /// any two implementations produce identical bytes.
     pub fn canonical_encode(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(8 + 64 + 64 + 64 + 8 + PUBKEY_SIZE + 4 + 8 + 8);
+        let mut buf = Vec::with_capacity(8 + 64 + 64 + 64 + 8 + PUBKEY_SIZE + 4 + 8 + 8 + 64 + SIG_SIZE);
         buf.extend_from_slice(&self.height.to_le_bytes());
         buf.extend_from_slice(&self.parent_hash);
         buf.extend_from_slice(&self.state_root);
@@ -104,6 +122,8 @@ impl BlockHeader {
         buf.extend_from_slice(&self.epoch.to_le_bytes());
         buf.extend_from_slice(&self.round.to_le_bytes());
         buf.extend_from_slice(&self.data_root);
+        buf.extend_from_slice(&self.vrf_output);
+        buf.extend_from_slice(&self.vrf_proof.0);
         buf
     }
 }
@@ -322,6 +342,19 @@ pub struct Validator {
     pub uptime: f64,
     pub blocks_produced: u64,
     pub status: ValidatorStatus,
+    /// G11 — Geographic region this validator operates in (e.g. "us-east",
+    /// "eu-west", "asia"). Self-declared at registration; the consensus
+    /// engine monitors the per-region stake distribution and caps any single
+    /// region at 15% of total active stake (VRF redistribution for capped
+    /// regions). See `geo_cap.rs`.
+    #[serde(default = "default_region")]
+    pub region: String,
+}
+
+/// Default region for validators created before the geo-cap field existed
+/// (backward compatibility). "unknown" is never capped.
+fn default_region() -> String {
+    "unknown".to_string()
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -547,20 +580,21 @@ impl ConsensusState {
         }
     }
 
-    /// Select the leader for the current round using round-robin weighted by stake.
-    /// In production this is replaced by PQ-VRF leader election.
+    /// Select the leader for the current round using PQ-VRF leader election.
     ///
-    /// CRITICAL: the leader index is derived from `last_finalized_height`, NOT from
-    /// an independent `current_round` counter. This guarantees every node at the same
-    /// chain height elects the SAME leader deterministically. An independent counter
-    /// desyncs when nodes finalize/view-change at different times -> different nodes
-    /// elect different leaders -> votes scatter across proposals -> permanent stall.
-    /// Height-based rotation is the standard approach in Tendermint/HotStuff-style BFT.
+    /// The leader is deterministically selected by the VRF output from the latest
+    /// finalized block: leader = validators[vrf_output % active_count]. Each block's
+    /// leader evaluates VRF(secret, parent_hash || height) and commits the output,
+    /// so the next leader is unpredictable until the current block is finalized.
+    ///
+    /// CRITICAL: every node at the same chain height elects the SAME leader
+    /// deterministically, because the VRF output is public in the block header.
+    /// View-change: if the elected leader is unreachable, `view_offset` increments
+    /// deterministically, rotating to the next validator (same on every node).
     pub fn select_leader(&self) -> Option<&Validator> {
         if self.validators.is_empty() {
             return None;
         }
-        // Weighted round-robin: leader = validators[height % active_validators]
         let active: Vec<&Validator> = self
             .validators
             .iter()
@@ -569,8 +603,40 @@ impl ConsensusState {
         if active.is_empty() {
             return None;
         }
-        let idx = ((self.last_finalized_height + self.view_offset) as usize) % active.len();
-        Some(active[idx])
+        // PQ-VRF: the leader is selected by the VRF output from the latest block.
+        // The VRF output is a 64-byte hash; we take the first 8 bytes as a u64
+        // seed and index into the active validator set. View-change adds an
+        // offset to rotate past an unreachable leader.
+        let vrf_seed: u64 = self
+            .chain
+            .last()
+            .map(|b| {
+                let bytes: [u8; 8] = b.header.vrf_output[..8].try_into().unwrap_or([0u8; 8]);
+                u64::from_le_bytes(bytes)
+            })
+            .unwrap_or(0);
+        // G11 — Geographic cap: compute the set of regions over the 15% cap.
+        // Validators in a capped region are deprioritized for leader election
+        // (VRF redistribution). We skip them unless ALL active validators are
+        // in capped regions (degenerate case — fall back to the raw index so
+        // consensus doesn't stall).
+        let capped_regions = crate::geo_cap::regions_over_cap(&self.validators);
+        let eligible: Vec<&Validator> = if capped_regions.is_empty() {
+            active.clone()
+        } else {
+            let filtered: Vec<&Validator> = active
+                .iter()
+                .copied()
+                .filter(|v| !capped_regions.contains(&v.region))
+                .collect();
+            if filtered.is_empty() {
+                active.clone() // degenerate: all capped → don't stall
+            } else {
+                filtered
+            }
+        };
+        let idx = (vrf_seed.wrapping_add(self.view_offset)) as usize % eligible.len();
+        Some(eligible[idx])
     }
 
     /// Advance the view-change offset, skipping the current unreachable leader
