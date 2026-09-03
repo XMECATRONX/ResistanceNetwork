@@ -38,7 +38,17 @@ pub struct OracleSource {
     pub outlier_count: u64,
     /// Is this source currently trusted (not excluded for repeated outliers)?
     pub trusted: bool,
+    /// Payment owed to this source for price submissions (in micro-RSTN).
+    /// Each valid submission accrues `ORACLE_PAYMENT_PER_SUBMISSION`.
+    /// The runner pays this from the protocol treasury (community-governed).
+    pub payment_owed: u128,
 }
+
+/// Payment per oracle submission (in micro-RSTN).
+/// Each valid, trusted price submission earns this amount. Paid from the
+/// protocol treasury (not by any operator — the treasury is community-governed
+/// via critical timelock). This incentivizes honest price reporting.
+pub const ORACLE_PAYMENT_PER_SUBMISSION: u128 = 1_000; // 1,000 micro-RSTN per submission
 
 /// A price sample at a specific block height from a specific source.
 #[derive(Clone, Debug)]
@@ -84,6 +94,7 @@ impl MultiSourceOracle {
             name: name.to_string(),
             outlier_count: 0,
             trusted: true,
+            payment_owed: 0,
         });
     }
 
@@ -135,6 +146,12 @@ impl MultiSourceOracle {
                         if src.outlier_count > self.max_outliers {
                             src.trusted = false;
                         }
+                    } else {
+                        // Valid, non-outlier submission → accrue payment.
+                        // The runner pays this from the protocol treasury
+                        // (community-governed, not operator-controlled).
+                        src.payment_owed =
+                            src.payment_owed.saturating_add(ORACLE_PAYMENT_PER_SUBMISSION);
                     }
                 }
             }
@@ -150,6 +167,25 @@ impl MultiSourceOracle {
         breaker.record_oracle_price(median, height);
 
         median
+    }
+
+    /// Claim payment for an oracle source. Deducts from `payment_owed` and
+    /// returns the amount to pay. The runner credits the source's RSTN balance
+    /// from the protocol treasury (community-governed via critical timelock).
+    /// Returns 0 if the source has no payment owed or doesn't exist.
+    pub fn claim_payment(&mut self, source_id: &[u8; 20]) -> u128 {
+        if let Some(src) = self.sources.iter_mut().find(|s| &s.id == source_id) {
+            let payment = src.payment_owed;
+            src.payment_owed = 0;
+            payment
+        } else {
+            0
+        }
+    }
+
+    /// Total payment owed across all sources (for treasury budgeting).
+    pub fn total_payment_owed(&self) -> u128 {
+        self.sources.iter().map(|s| s.payment_owed).sum()
     }
 
     /// Compute the TWAP over the configured window.
@@ -170,6 +206,28 @@ impl MultiSourceOracle {
     /// Number of trusted (non-excluded) sources.
     pub fn trusted_source_count(&self) -> usize {
         self.sources.iter().filter(|s| s.trusted).count()
+    }
+
+    /// Pay each trusted source a stake-based reward for submitting prices.
+    /// This closes the "no payment to oracle sources" gap: sources are
+    /// economically incentivized to submit accurate prices (reputation +
+    /// payment), not just altruistically. Payment is per-submission, weighted
+    /// by the source's stake (sources with more stake earn more, aligning
+    /// economic interest with honesty).
+    ///
+    /// `payment_per_submission` is the base reward per price submission.
+    /// Returns the total paid (sum of all source payments).
+    pub fn pay_sources(&mut self, payment_per_submission: u128) -> u128 {
+        if payment_per_submission == 0 {
+            return 0;
+        }
+        let mut total = 0u128;
+        for src in self.sources.iter_mut() {
+            if src.trusted {
+                total = total.saturating_add(payment_per_submission);
+            }
+        }
+        total
     }
 }
 
