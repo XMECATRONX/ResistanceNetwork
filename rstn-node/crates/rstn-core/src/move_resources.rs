@@ -54,6 +54,7 @@ impl ResourceType {
 /// NOT Clone and NOT Drop — they must be explicitly moved or burned. This
 /// is the core Move safety guarantee: you cannot accidentally copy or lose
 /// a resource.
+#[derive(Debug)]
 pub struct Resource {
     /// The type tag of this resource.
     pub type_tag: ResourceType,
