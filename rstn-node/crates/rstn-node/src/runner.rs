@@ -225,11 +225,20 @@ fn apply_block_transactions(
     block: &rstn_core::Block,
     circuit_breaker: &mut rstn_core::circuit_breaker::CircuitBreaker,
     current_base_fee: u128,
-) -> usize {
+) -> (usize, u128) {
     let height = block.header.height;
     let mut success_count = 0;
+    // Accumulate the total validator tip across all txs in this block.
+    // The tip is NOT credited to the validator here — it is returned to the
+    // caller so it can be passed through `distribute_rewards` (which applies
+    // the validator's commission and owes the rest to delegators). This avoids
+    // the double-accounting bug where the tip was credited to the validator's
+    // balance AND tracked as a delegator liability in pending_rewards.
+    let mut block_total_tip: u128 = 0;
 
-    for tx in &block.transactions {
+    for orig_tx in &block.transactions {
+        // Clone so we can set `gas_used` after VM execution (Gap 6 refund).
+        let mut tx = orig_tx.clone();
         let from_addr = rstn_crypto::derive_address(&tx.from);
         let to_addr = tx.to;
         let gas_fee = tx.gas_price * tx.gas_limit as u128;
@@ -252,29 +261,24 @@ fn apply_block_transactions(
         // (Solana's mistake — their 50% burn killed validators, reverted
         // in SIMD-96 Feb 2025). Streams are separated by design.
         //
-        // BUG FIX (audit round): the previous code hardcoded
-        // `rstn_core::fee_market::BASE_FEE_FLOOR` (a constant 1 gwei) for the
-        // burn split, so the dynamic base fee that ConsensusEngine adjusts per
-        // block (EIP-1559) never propagated to the actual burn — the floor was
-        // the only value ever used. Now we pass the engine's CURRENT dynamic
-        // base fee (which adjusts up on full blocks, down on empty blocks) and
-        // use the FeeMarket's split logic. The 1 gwei floor is still enforced
-        // inside FeeMarket, so the burn never dies.
+        // GAS REFUND (Gap 6 fix): the user is charged the WORST-CASE
+        // `gas_price * gas_limit` up-front (so the balance check holds), but
+        // after execution the fee is settled on `gas_used` (the gas the VM
+        // actually consumed). The unused portion `(gas_limit - gas_used) *
+        // gas_price` is REFUNDED to the sender. This matches Ethereum's
+        // behavior and removes the penalty for reserving more gas than
+        // needed. If `gas_used` is not set (legacy tx), we charge the full
+        // `gas_limit` (backward compatible — no refund).
         let fm = rstn_core::fee_market::FeeMarket { base_fee: current_base_fee, last_block_gas: 0 };
         let mut tx_failed = false;
+        // Pre-execution: debit the WORST-CASE gas fee (gas_price * gas_limit)
+        // so the balance check holds. The actual settlement (burn + tip +
+        // refund of unused gas) happens AFTER VM execution, once we know the
+        // real `gas_used`.
         if gas_fee > 0 {
             if let Err(e) = state.db.update_balance(&from_addr, -(gas_fee as i128)) {
                 tracing::warn!("Failed to debit gas in block {}: {}", height, e);
                 tx_failed = true;
-            } else {
-                let (burn_amount, validator_reward) = fm.split_fee(tx.gas_price, tx.gas_limit);
-                let validator_addr = rstn_crypto::derive_address(&block.header.validator);
-                let _ = state.db.update_balance(&validator_addr, validator_reward as i128);
-                // burn_amount is simply not credited to anyone — destroyed.
-                tracing::debug!(
-                    "Block {} tx: burn={} (base_fee {} gwei), validator_tip={}",
-                    height, burn_amount, current_base_fee / 1_000_000_000, validator_reward
-                );
             }
         }
 
@@ -432,6 +436,9 @@ fn apply_block_transactions(
                             .with_block_context(1337, height, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
                             match vm.execute(&bytecode) {
                                 Ok(result) => {
+                                    // Record the gas the VM actually consumed so the
+                                    // fee settlement refunds the unused reserved gas.
+                                    tx.gas_used = Some(result.gas_used);
                                     if result.success {
                                         tracing::info!(
                                             "Contract call in block {}: {} gas used, {} bytes output, {} logs",
@@ -503,6 +510,9 @@ fn apply_block_transactions(
 
                     match vm.execute(&init_code) {
                         Ok(result) if result.success => {
+                            // Record the gas the VM actually consumed so the
+                            // fee settlement refunds the unused reserved gas.
+                            tx.gas_used = Some(result.gas_used);
                             // The RETURN output is the runtime bytecode to store.
                             let runtime_code = result.output;
                             if runtime_code.is_empty() {
@@ -534,6 +544,36 @@ fn apply_block_transactions(
             }
         }
 
+        // POST-EXECUTION GAS SETTLEMENT (Gap 6 fix): now that the VM has run
+        // (for contract txs) we know the real `gas_used`. Settle the fee on
+        // the ACTUAL consumed gas: credit the validator tip, and REFUND the
+        // unused reserved gas to the sender. For non-contract txs (Transfer,
+        // Stake, etc.) `gas_used` is None → we charge the full gas_limit
+        // (backward compatible — these txs have a fixed intrinsic cost).
+        if gas_fee > 0 && !tx_failed {
+            let gas_consumed = tx.gas_used.unwrap_or(tx.gas_limit);
+            let gas_refund = tx.gas_price * (tx.gas_limit.saturating_sub(gas_consumed)) as u128;
+            let (burn_amount, validator_tip) = fm.split_fee(tx.gas_price, gas_consumed);
+            // Accumulate the tip — do NOT credit it to the validator here.
+            // The caller passes `block_total_tip` to `distribute_rewards` which
+            // applies the validator's commission (leader keeps commission%,
+            // rest owed to delegators via pending_rewards). This is the
+            // CONSISTENT reward path: both tips AND block rewards go through
+            // distribute_rewards, so commission applies to all validator income.
+            block_total_tip = block_total_tip.saturating_add(validator_tip);
+            if gas_refund > 0 {
+                let _ = state.db.update_balance(&from_addr, gas_refund as i128);
+                tracing::debug!(
+                    "Block {} tx: gas refund={} (reserved {}, used {})",
+                    height, gas_refund, tx.gas_limit, gas_consumed
+                );
+            }
+            tracing::debug!(
+                "Block {} tx: burn={} (base_fee {} gwei), validator_tip={} (accumulated for distribute_rewards)",
+                height, burn_amount, current_base_fee / 1_000_000_000, validator_tip
+            );
+        }
+
         // Only increment nonce if the tx succeeded
         if !tx_failed {
             let _ = state.db.increment_nonce(&from_addr);
@@ -541,7 +581,7 @@ fn apply_block_transactions(
         }
     }
 
-    success_count
+    (success_count, block_total_tip)
 }
 
 /// Store a block and its transactions, then update consensus state.
@@ -743,20 +783,25 @@ async fn try_catchup(
                 }
                 if !pre_applied.contains(&next_h) {
                     let current_base_fee = engine.current_base_fee();
-                    let _processed = apply_block_transactions(state, &blk, &mut engine.circuit_breaker, current_base_fee);
+                    let (_processed, block_total_tip) = apply_block_transactions(state, &blk, &mut engine.circuit_breaker, current_base_fee);
                     let validator_addr = rstn_crypto::derive_address(&blk.header.validator);
-                    // BUG FIX (audit): apply the dynamic inflation multiplier to
-                    // the block reward. The base reward is 0.1 RSTN (10^17 wei).
-                    // DynamicInflation targets 66% staked, capped at +2%: if the
-                    // network is under-staked, distribute up to 2% more to
-                    // incentivize staking (boosts security). The multiplier is
-                    // applied per-block so the reserve distribution tracks the
-                    // real staking ratio dynamically (fixes Cosmos' flat 20%).
+                    // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): both the
+                    // accumulated tips AND the block reward pass through
+                    // `distribute_rewards` so the validator's commission
+                    // applies to ALL validator income (tips + block reward).
+                    // The leader keeps `commission%`, the rest is owed to
+                    // delegators (tracked in pending_rewards for later claim).
                     let staking_ratio_bps = compute_staking_ratio_bps(state);
                     let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
                     let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
                     let block_reward = base_block_reward * multiplier_bps / 10000;
-                    let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
+                    // Pass tips + block reward through distribute_rewards so
+                    // commission applies to the total. The leader's commission
+                    // share is credited to their balance; the rest is owed to
+                    // delegators (tracked in pending_rewards).
+                    let total_validator_income = block_total_tip.saturating_add(block_reward);
+                    let leader_commission = engine.state.distribute_rewards(&blk.header.validator, total_validator_income);
+                    let _ = state.db.update_rewards(&validator_addr, leader_commission as i128);
                 } else {
                     pre_applied.remove(&next_h);
                 }
@@ -1113,7 +1158,7 @@ pub async fn start_block_production(
 
                                 // -- Apply state transitions (shared function) --
                                 let base_fee = engine.current_base_fee();
-                                let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
+                                let (_processed, block_total_tip) = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
 
                                 // -- Recompute state_root AFTER applying txs --
                                 // The block header's state_root should reflect the post-tx state.
@@ -1141,7 +1186,12 @@ pub async fn start_block_production(
                                 let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
                                 let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
                                 let block_reward = base_block_reward * multiplier_bps / 10000;
-                                let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
+                                // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): pass
+                                // tips + block reward through distribute_rewards so
+                                // commission applies to ALL validator income.
+                                let total_validator_income = block_total_tip.saturating_add(block_reward);
+                                let leader_commission = engine.state.distribute_rewards(&block.header.validator, total_validator_income);
+                                let _ = state.db.update_rewards(&validator_addr, leader_commission as i128);
 
                                 // -- Store block + txs --
                                 store_block_and_txs(&state, height, &block);
@@ -1274,7 +1324,7 @@ pub async fn start_block_production(
 
                             // Apply state transitions on the leader's DB now
                             let base_fee = engine.current_base_fee();
-                            let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
+                            let (_processed, block_total_tip) = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
 
                             // Recompute state_root AFTER applying txs (post-tx)
                             let post_state_root = compute_state_root(&state.db);
@@ -1296,7 +1346,12 @@ pub async fn start_block_production(
                             let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
                             let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
                             let block_reward = base_block_reward * multiplier_bps / 10000;
-                            let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
+                            // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): pass
+                            // tips + block reward through distribute_rewards so
+                            // commission applies to ALL validator income.
+                            let total_validator_income = block_total_tip.saturating_add(block_reward);
+                            let leader_commission = engine.state.distribute_rewards(&block.header.validator, total_validator_income);
+                            let _ = state.db.update_rewards(&validator_addr, leader_commission as i128);
 
                             let hash = hex::encode(new_hash);
                             tracing::info!("Block #{} proposed by leader, broadcasting...", height);
@@ -1563,7 +1618,7 @@ pub async fn start_block_production(
                                                                     // their state matches the leader's post-tx state_root.
                                                                     if !pre_applied.contains(&height) {
                                                                         let base_fee = engine.current_base_fee();
-                                                                        let _processed = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
+                                                                        let (_processed, block_total_tip) = apply_block_transactions(&state, &block, &mut engine.circuit_breaker, base_fee);
 
                                                                         // -- Distribute block reward to validator --
                                                                         let validator_addr = rstn_crypto::derive_address(&block.header.validator);
@@ -1571,7 +1626,12 @@ pub async fn start_block_production(
                                                                         let multiplier_bps = engine.inflation_multiplier(staking_ratio_bps);
                                                                         let base_block_reward: u128 = 100_000_000_000_000_000; // 0.1 RSTN
                                                                         let block_reward = base_block_reward * multiplier_bps / 10000;
-                                                                        let _ = state.db.update_rewards(&validator_addr, block_reward as i128);
+                                                                        // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): pass
+                                                                        // tips + block reward through distribute_rewards so
+                                                                        // commission applies to ALL validator income.
+                                                                        let total_validator_income = block_total_tip.saturating_add(block_reward);
+                                                                        let leader_commission = engine.state.distribute_rewards(&block.header.validator, total_validator_income);
+                                                                        let _ = state.db.update_rewards(&validator_addr, leader_commission as i128);
                                                                     } else {
                                                                         // Leader already applied -- just stop tracking this height
                                                                         pre_applied.remove(&height);
