@@ -25,7 +25,6 @@
 //!     reveal later (this is real-time submission).
 //!   - Cross-chain price feeds via IBC (prices are local to this chain).
 
-use std::collections::HashMap;
 use crate::circuit_breaker::CircuitBreaker;
 
 /// An oracle price source (e.g. Chainlink, Pyth, API3, a native oracle).
