@@ -265,6 +265,14 @@ pub const TAG_SYNC: u8 = 3;
 pub const TAG_COMMIT_CERT: u8 = 4;
 /// G14 — Forced-inclusion attestation (censorship-resistance: N+1).
 pub const TAG_INCLUSION_ATTESTATION: u8 = 5;
+/// G3-complete — DAS shard request/response. A light client (or a node
+/// missing a block's body) requests a specific shard index + Merkle proof
+/// from its peers. The response carries the shard + proof, verified against
+/// the block's committed data_root. This is the "DAS-by-bits" distributed
+/// sampling wire protocol: no single node holds the full blob; shards are
+/// spread across the network and reconstructed only if ≥ K are collectively
+/// available.
+pub const TAG_DAS_SHARD: u8 = 6;
 
 // Legacy topic constants kept for backwards-compatible imports.
 // All publishing now uses TOPIC_ALL, but these are referenced by

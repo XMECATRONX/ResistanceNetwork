@@ -352,6 +352,7 @@ fn apply_block_transactions(
                                 uptime: 1.0,
                                 blocks_produced: 0,
                                 status: rstn_core::ValidatorStatus::Active,
+                                region: "unknown".to_string(),
                             });
                         validator.stake += tx.value;
                         validator.status = rstn_core::ValidatorStatus::Active;
@@ -1508,7 +1509,7 @@ pub async fn start_block_production(
                         // path entirely.
                         match vote.phase {
                             BftVotePhase::Prepare => {
-                                match engine.collect_prepare_vote(vote) {
+                                match engine.collect_prepare_vote(vote.clone()) {
                                     Ok(reached_supermajority) => {
                                         let count = engine.prepare_votes.get(&block_hash).map(|v| v.len()).unwrap_or(0);
                                         tracing::info!("PREPARE vote accepted ({} for #{}, need supermajority)", count, height);
