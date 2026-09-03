@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://preview-1788451660165176190.vibepreview.com/sitemap.xml
+Sitemap: /sitemap.xml

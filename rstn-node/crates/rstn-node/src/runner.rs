@@ -470,6 +470,10 @@ fn apply_block_transactions(
                             let gas_limit = tx.gas_limit.min(10_000_000);
                             let tx_hash = tx.hash();
                             let mut host = rstn_vm::DbHost { db: &state.db };
+                            // Seed the CREATE nonce from the sender's on-chain
+                            // account nonce so CREATE-derived addresses match
+                            // the real nonce progression (EVM CREATE semantics).
+                            let sender_nonce = state.db.get_nonce(&from_addr).unwrap_or(0);
                             let mut vm = rstn_vm::RstnVM::with_context(
                                 gas_limit,
                                 tx.payload.clone(),
@@ -479,6 +483,7 @@ fn apply_block_transactions(
                             )
                             .with_db(&state.db)
                             .with_host(&mut host)
+                            .with_create_nonce(sender_nonce)
                             .with_block_context(1337, height, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
                             match vm.execute(&bytecode) {
                                 Ok(result) => {
@@ -486,6 +491,10 @@ fn apply_block_transactions(
                                     // fee settlement refunds the unused reserved gas.
                                     tx.gas_used = Some(result.gas_used);
                                     if result.success {
+                                        // Commit the storage overlay to the DB now
+                                        // that the top-level frame succeeded. Child
+                                        // REVERTs already discarded their writes.
+                                        vm.flush_storage();
                                         tracing::info!(
                                             "Contract call in block {}: {} gas used, {} bytes output, {} logs",
                                             height, result.gas_used, result.output.len(), result.logs.len()
@@ -508,7 +517,7 @@ fn apply_block_transactions(
                                         }
                                     } else {
                                         tracing::warn!(
-                                            "Contract call reverted in block {}: {} gas used",
+                                            "Contract call reverted in block {}: {} gas used (storage changes discarded)",
                                             height, result.gas_used
                                         );
                                         tx_failed = true;
@@ -544,6 +553,7 @@ fn apply_block_transactions(
 
                     // Execute the init code in a fresh VM with the contract address as
                     // context (so ADDRESS / CALLER work during construction).
+                    let sender_nonce = state.db.get_nonce(&from_addr).unwrap_or(0);
                     let mut vm = rstn_vm::RstnVM::with_context(
                         gas_limit,
                         Vec::new(), // no calldata during deploy
@@ -552,6 +562,7 @@ fn apply_block_transactions(
                         contract_addr,
                     )
                     .with_db(&state.db)
+                    .with_create_nonce(sender_nonce)
                     .with_block_context(1337, height, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
 
                     match vm.execute(&init_code) {
@@ -568,6 +579,8 @@ fn apply_block_transactions(
                                 tracing::warn!("ContractDeploy storage failed in block {}: {}", height, e);
                                 tx_failed = true;
                             } else {
+                                // Commit the constructor's storage overlay.
+                                vm.flush_storage();
                                 tracing::info!(
                                     "ContractDeploy in block {}: init {} bytes -> runtime {} bytes -> {} (deployer nonce {})",
                                     height, init_code.len(), runtime_code.len(), rstn_crypto::format_address(&contract_addr), tx.nonce

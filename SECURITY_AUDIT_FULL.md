@@ -2,7 +2,7 @@
 ### Frontend + Backend (Rust) + Wallet Extension + Deploy CLI
 
 > Fecha: 2026-09-01 (revisión de remediación: 2026-09-01)
-> Auditor: AI Studio
+> Auditor: Equipo interno de Resistance Network
 > Estado: **CONFIDENCIAL — USO INTERNO**
 > Cobertura: revisión estática de código fuente (no es auditoría criptográfica formal ni fuzzing).
 

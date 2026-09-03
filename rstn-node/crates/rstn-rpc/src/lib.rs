@@ -2391,10 +2391,14 @@ async fn get_contract_address(_state: &RpcState, params: Option<&Value>) -> Resu
         .unwrap_or(0);
 
     let from_bytes = parse_address(from_str)?;
+    // EVM CREATE address: keccak256(rlp([sender, nonce]))[12..].
+    // Uses Keccak-256 (EVM standard) so the predicted address matches
+    // what Hardhat/Foundry/ethers.js compute. Native RSTN addresses use
+    // Keccak-512; this EVM-compatibility endpoint uses Keccak-256.
     let mut addr_input = Vec::with_capacity(20 + 8);
     addr_input.extend_from_slice(&from_bytes);
     addr_input.extend_from_slice(&nonce.to_le_bytes());
-    let hash = rstn_crypto::keccak512(&addr_input);
+    let hash = rstn_crypto::keccak256(&addr_input);
     let contract_addr: [u8; 20] = hash[..20].try_into().unwrap_or([0u8; 20]);
 
     Ok(serde_json::json!({
@@ -2406,14 +2410,16 @@ async fn get_contract_address(_state: &RpcState, params: Option<&Value>) -> Resu
 // EVM COMPATIBILITY LAYER (eth_*) -- Hardhat / Foundry / ethers.js
 // ===============================================================
 
-/// web3_sha3 -- Keccak-512 (RSTN uses Keccak-512, not Keccak-256).
+/// web3_sha3 -- Keccak-256 (EVM standard). Ethereum's web3_sha3 MUST return
+/// Keccak-256, not Keccak-512, or EVM tooling (Hardhat/Foundry/ethers.js)
+/// computes mismatched hashes. Native RSTN hashing still uses Keccak-512.
 async fn web3_sha3(data: Option<&Value>) -> Result<Value, RpcError> {
     let hex_str = data
         .and_then(|v| v.as_str())
         .ok_or_else(|| RpcError::InvalidParams("missing data".into()))?;
     let input = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
         .map_err(|e| RpcError::InvalidParams(format!("invalid hex: {}", e)))?;
-    let hash = rstn_crypto::keccak512(&input);
+    let hash = rstn_crypto::keccak256(&input);
     Ok(Value::String(format!("0x{}", hex::encode(hash))))
 }
 

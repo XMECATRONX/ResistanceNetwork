@@ -489,3 +489,149 @@ fn test_eq_false() {
     let code = [0x60, 0x05, 0x60, 0x06, 0x14];
     assert_eq!(out_u64(&run_ret(&code)), 0);
 }
+
+// ============================================================
+// Bug 6: pop_addr right-alignment (CALL/BALANCE address extraction)
+// ============================================================
+
+/// An address pushed as a left-padded 32-byte word (as Solidity/ethers.js
+/// do) must be extracted as the RIGHT-aligned 20 low bytes. Before the fix,
+/// pop_addr took the LEFT 20 bytes, breaking CALL/BALANCE/EXTCODE.
+#[test]
+fn test_pop_addr_right_aligned() {
+    // PUSH32 <word with marker in low 20 bytes> | EXTCODESIZE | MSTORE | RETURN
+    // EXTCODESIZE pops an address via pop_addr. Without a host/db it returns 0,
+    // but the critical regression is that pop_addr extracts the right-aligned
+    // tail without panic. A wrong (left-byte) extraction would still run, so we
+    // additionally verify via a host spy that the queried address matches the
+    // expected low-20 bytes.
+    use rstn_vm::Host;
+    use std::cell::RefCell;
+
+    struct AddrSpy(RefCell<Option<[u8; 20]>>);
+    impl Host for AddrSpy {
+        fn get_code(&self, a: &[u8; 20]) -> Option<Vec<u8>> {
+            *self.0.borrow_mut() = Some(*a);
+            None
+        }
+        fn get_balance(&self, _a: &[u8; 20]) -> u128 { 0 }
+        fn put_code(&mut self, _a: &[u8; 20], _c: &[u8]) -> bool { false }
+        fn get_storage(&self, _a: &[u8; 20], _k: &[u8; 32]) -> Vec<u8> { Vec::new() }
+        fn put_storage(&mut self, _a: &[u8; 20], _k: &[u8; 32], _v: &[u8]) {}
+    }
+
+    let mut code = vec![0x7F]; // PUSH32
+    let mut word = [0u8; 32];
+    // Address lives in bytes[12..32]. Put 0xAB at index 12, 0xCD at index 31.
+    word[12] = 0xAB;
+    word[31] = 0xCD;
+    code.extend_from_slice(&word);
+    code.extend_from_slice(&[0x3B]); // EXTCODESIZE
+    code.extend_from_slice(&[0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3]);
+
+    let spy = AddrSpy(RefCell::new(None));
+    let mut vm = rstn_vm::RstnVM::new(10_000_000);
+    vm.host = Some(&mut spy);
+    let res = vm.execute(&code).expect("no panic");
+    assert!(res.success, "EXTCODESIZE with right-aligned address must not panic");
+    // The host received the address pop_addr extracted.
+    let queried = spy.0.borrow().expect("host was queried");
+    let mut expected = [0u8; 20];
+    expected[0] = 0xAB;
+    expected[19] = 0xCD;
+    assert_eq!(queried, expected, "pop_addr must extract the right-aligned low 20 bytes");
+}
+
+// ============================================================
+// Bug 7: SSTORE in a reverted sub-call must NOT persist
+// ============================================================
+
+/// A child CALL that SSTOREs and then REVERTs must leave NO storage change.
+/// Before the fix, SSTORE wrote directly to the DB, so the child's write
+/// persisted even after REVERT. Now SSTORE writes to an in-memory overlay
+/// that is snapshotted/restored around sub-calls.
+#[test]
+fn test_sstore_revert_in_subcall_discarded() {
+    // Parent: CALL a child that SSTOREs key=0 value=0x99 then REVERTs.
+    // After the CALL, the parent SLOADs key=0 and must see 0 (the child's
+    // write was discarded), not 0x99.
+    //
+    // We need a host with deployable code. Build a child contract that:
+    //   PUSH1 0x99 | PUSH1 0x00 | SSTORE | PUSH1 0x00 | PUSH1 0x00 | REVERT
+    // and a parent that CALLs it then SLOADs key 0.
+    use rstn_vm::Host;
+
+    struct MemHost {
+        codes: std::collections::HashMap<[u8; 20], Vec<u8>>,
+        storage: std::collections::HashMap<([u8; 20], [u8; 32]), Vec<u8>>,
+    }
+    impl Host for MemHost {
+        fn get_code(&self, a: &[u8; 20]) -> Option<Vec<u8>> {
+            self.codes.get(a).cloned()
+        }
+        fn get_balance(&self, _a: &[u8; 20]) -> u128 { 0 }
+        fn put_code(&mut self, a: &[u8; 20], c: &[u8]) -> bool {
+            self.codes.insert(*a, c.to_vec()); true
+        }
+        fn get_storage(&self, a: &[u8; 20], k: &[u8; 32]) -> Vec<u8> {
+            self.storage.get(&(*a, *k)).cloned().unwrap_or_default()
+        }
+        fn put_storage(&mut self, a: &[u8; 20], k: &[u8; 32], v: &[u8]) {
+            self.storage.insert((*a, *k), v.to_vec());
+        }
+    }
+
+    // Child code: SSTORE(0, 0x99) then REVERT(0,0)
+    let child_code: Vec<u8> = vec![
+        0x60, 0x99, // PUSH1 0x99
+        0x60, 0x00, // PUSH1 0x00
+        0x55,       // SSTORE
+        0x60, 0x00, // PUSH1 0x00
+        0x60, 0x00, // PUSH1 0x00
+        0xfd,       // REVERT
+    ];
+
+    let child_addr = [0xCC; 20];
+    let mut host = MemHost {
+        codes: std::collections::HashMap::new(),
+        storage: std::collections::HashMap::new(),
+    };
+    host.put_code(&child_addr, &child_code);
+
+    // Parent code: CALL(gas, child_addr, 0, 0,0, 0,0) | PUSH1 0 | SLOAD | MSTORE | RETURN
+    // CALL stack: gas, addr, value, argsOff, argsLen, retOff, retLen
+    let mut parent = Vec::new();
+    parent.push(0x60); parent.push(0x00); // PUSH1 0 (retLen)
+    parent.push(0x60); parent.push(0x00); // PUSH1 0 (retOff)
+    parent.push(0x60); parent.push(0x00); // PUSH1 0 (argsLen)
+    parent.push(0x60); parent.push(0x00); // PUSH1 0 (argsOff)
+    parent.push(0x60); parent.push(0x00); // PUSH1 0 (value)
+    // PUSH20 child_addr (left-padded to 32 via PUSH32)
+    parent.push(0x7F);
+    let mut addr_word = [0u8; 32];
+    addr_word[12..].copy_from_slice(&child_addr);
+    parent.extend_from_slice(&addr_word);
+    parent.push(0x60); parent.push(0xFF); // PUSH1 0xFF (gas, generous)
+    parent.push(0xF1); // CALL
+    // pop the CALL success flag (leave it; we don't care)
+    parent.push(0x50); // POP
+    // SLOAD key 0
+    parent.push(0x60); parent.push(0x00); // PUSH1 0
+    parent.push(0x54); // SLOAD
+    // MSTORE 0 | RETURN 32
+    parent.push(0x60); parent.push(0x00); // PUSH1 0
+    parent.push(0x52); // MSTORE
+    parent.push(0x60); parent.push(0x20); // PUSH1 32
+    parent.push(0x60); parent.push(0x00); // PUSH1 0
+    parent.push(0xF3); // RETURN
+
+    let mut vm = rstn_vm::RstnVM::with_context(10_000_000, Vec::new(), [0xAA; 20], 0, [0xAA; 20]);
+    vm.host = Some(&mut host);
+    let res = vm.execute(&parent).expect("no panic");
+    assert!(res.success, "parent must succeed");
+    // The child's SSTORE(0, 0x99) was reverted, so SLOAD(0) must be 0.
+    let mut buf = [0u8; 32];
+    let len = res.output.len().min(32);
+    buf[..len].copy_from_slice(&res.output[..len]);
+    assert_eq!(buf[31], 0, "reverted child SSTORE must NOT persist (expected 0, got 0x{:02X})", buf[31]);
+}

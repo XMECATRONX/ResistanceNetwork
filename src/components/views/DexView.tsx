@@ -243,8 +243,8 @@ export const DexView = () => {
         title={es ? "Contratos del DEX" : "DEX contracts"}
         description={
           es
-            ? "Solidity 0.8.20. Compilados con Hardhat + viaIR. Listos para desplegar en la L1 de RSTN (EVM-compatible vía revm)."
-            : "Solidity 0.8.20. Compiled with Hardhat + viaIR. Ready to deploy on the RSTN L1 (EVM-compatible via revm)."
+            ? "Solidity 0.8.20. Compilados con Hardhat + viaIR. Listos para desplegar en la L1 de RSTN (subconjunto EVM vía transpiler)."
+            : "Solidity 0.8.20. Compiled with Hardhat + viaIR. Ready to deploy on the RSTN L1 (EVM subset via transpiler)."
         }
       >
         <div className="space-y-2">

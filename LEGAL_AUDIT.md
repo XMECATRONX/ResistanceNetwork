@@ -41,10 +41,10 @@ El test Howey tiene 4 elementos. Para ser security, debe cumplir TODOS:
 
 | Elemento Howey | RSTN cumple? | Análisis |
 |---------------|-------------|----------|
-| **1. Inversión de dinero** | **NO claro** | Distribution model es "fair launch" — no hay venta de tokens. Pero el equipo recibe 10% (vesting). Staking requiere RSTN. |
-| **2. Empresa común** | **NO** | No hay empresa central que controla los fondos. Gobernanza on-chain. Treasury controlado por votación. |
+| **1. Inversión de dinero** | **NO** | Fair launch: no hay venta de tokens. Distribución 95/5 (Proof of Participation + Testnet Airdrop). Cero asignación al equipo. Staking requiere RSTN, pero el token no se vende. |
+| **2. Empresa común** | **NO** | No hay empresa central que controla los fondos. Gobernanza on-chain. Sin treasury capturable en el bloque 0 (la security reserve nace del uso, no de la génesis). |
 | **3. Expectativa de ganancias** | **RIESGO** | El marketing menciona "yield", "recompensas", "deflacionario", "burn reduce supply". Esto puede interpretarse como expectativa de ganancia. |
-| **4. Esfuerzo gerencial de otros** | **RIESGO** | El equipo tiene 10% con vesting. El equipo desarrolla el protocolo. Los stakers dependen del trabajo del equipo para que la red funcione. |
+| **4. Esfuerzo gerencial de otros** | **RIESGO** | El equipo NO tiene asignación reservada (modelo Satoshi: gana operando el genesis validator). Pero los stakers dependen del trabajo del equipo para que la red funcione. El riesgo persiste aunque no haya vesting. |
 
 ### 1.3 Riesgos identificados en el código
 
@@ -79,7 +79,7 @@ noIco: "Cero ICO. Cero pre-venta. Cero VC. Cero venta de tokens en cualquier for
 
 1. **No afirmar "pasa el Howey Test"** — un abogado debe hacer ese análisis, no el código
 2. **Remover lenguaje de "yield" y "recompensas"** donde implique ganancia garantizada
-3. **El 10% al equipo con vesting** — la SEC puede ver esto como "esfuerzo gerencial de otros" (elemento 4 de Howey)
+3. **Sin asignación al equipo** — el modelo Satoshi (95/5) elimina el "10% team vesting" que la SEC podía leer como "esfuerzo gerencial de otros" (elemento 4 de Howey). El equipo gana operando el genesis validator, no por pre-asignación. Esto reduce el riesgo Howey pero no lo elimina (el elemento 4 persiste por la dependencia operacional).
 4. **"Deflacionario" como selling point** — implica que el token subirá de valor, lo que satisface el elemento 3 de Howey
 5. **Agregar disclaimers más fuertes** en toda superficie visible
 

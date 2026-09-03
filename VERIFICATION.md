@@ -229,11 +229,16 @@ parcial — ver `DEVELOPMENT_STATUS_HONEST.md` para el detalle por crate).
 
 ## 4. VM (RSTN-VM)
 
-### ✅ EVM-compatible — IMPLEMENTADO
-- **Verifica:** `cargo test -p rstn-vm --test opcodes` (33 opcodes)
+### ✅ Subconjunto EVM — IMPLEMENTADO
+- **Verifica:** `cargo test -p rstn-vm --test opcodes` (33 opcodes + tests de regresión)
 - **Hecho real:** ADD, SUB, MUL, DIV, SDIV, MOD, SMOD, EXP, LT, GT, EQ, ISZERO,
   AND, OR, XOR, NOT, SHL, SHR, POP, DUP, SWAP, MSTORE, MLOAD, SSTORE, SLOAD,
   JUMP, JUMPI, JUMPDEST, CALLDATALOAD, RETURN, REVERT, STOP, gas, memoria, stack.
+- **Correcciones de auditoría cerradas:**
+  - `pop_addr()` ahora extrae los 20 bytes bajos alineados a la derecha (antes tomaba los bytes izquierdos — rompía CALL/BALANCE/EXTCODE con direcciones left-padded de Solidity).
+  - `SSTORE` escribe a un overlay en memoria; el overlay se snapshot/restorea alrededor de CALL/CREATE, así un sub-call REVERT descarta sus escrituras (semántica journal de EVM). El flush al DB ocurre solo cuando el frame top-level tiene éxito (`flush_storage`).
+  - `CREATE` usa un nonce monótono por-VM sembrado desde el nonce on-chain de la cuenta (antes `block_number + address[0]` → colisión entre dos CREATE del mismo sender en el mismo bloque).
+- **Limitación declarada honestamente:** `SELFDESTRUCT` (0xFF) no transfiere balance ni borra la cuenta — solo detiene la ejecución con éxito. No es compatible con la semántica completa de EVM; los contratos que dependan de SELFDESTRUCT deben adaptarse.
 
 ### ✅ Resistente a DoS — IMPLEMENTADO
 - **Verifica:** `cargo test -p rstn-vm --test adversarial` (17 tests)
@@ -243,11 +248,11 @@ parcial — ver `DEVELOPMENT_STATUS_HONEST.md` para el detalle por crate).
 ### ✅ Move-style resources — IMPLEMENTADO
 - **Código:** `crates/rstn-core/src/move_resources.rs`
 - **Hecho real:** Sistema de recursos lineales (no Copy, no Drop) sobre la VM
-  EVM-compatible. `move_resource` atomiza transferencias (no double-spend a
+  EVM-compatible (subconjunto). `move_resource` atomiza transferencias (no double-spend a
   nivel de tipos), mint/burn con tracking de supply, verificación de no-duplicación.
 - **Lo que NO es (declarado honestamente):** No es un Move bytecode verifier
   completo ni module/script deployment con capability-based access control.
-  Es un sistema de recursos a nivel Rust sobre la VM EVM-compatible.
+  Es un sistema de recursos a nivel Rust sobre la VM (subconjunto EVM).
 
 ### ✅ Formal verification foundation — IMPLEMENTADO
 - **Código:** `crates/rstn-vm/src/formal.rs`

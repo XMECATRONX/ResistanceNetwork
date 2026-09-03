@@ -724,6 +724,11 @@ pub struct RstnVM<'a> {
     /// Whether this frame is read-only (STATICCALL). SSTORE/CREATE/SELFDESTRUCT
     /// revert when true.
     pub static_flag: bool,
+    /// Monotonic per-VM CREATE nonce counter. Each CREATE within this VM
+    /// instance increments this, so two CREATEs from the same sender in the
+    /// same block produce DIFFERENT derived addresses (EVM CREATE semantics).
+    /// The runner seeds this from the account's on-chain nonce at VM start.
+    pub create_nonce: u64,
 }
 
 impl<'a> RstnVM<'a> {
@@ -755,6 +760,7 @@ impl<'a> RstnVM<'a> {
             basefee: 0,
             self_balance: 0,
             static_flag: false,
+            create_nonce: 0,
         }
     }
 
@@ -782,6 +788,37 @@ impl<'a> RstnVM<'a> {
         self.block_timestamp = block_timestamp;
         self.block_gas_limit = self.gas;
         self
+    }
+
+    /// Seed the CREATE nonce counter from the sender's on-chain account nonce.
+    /// The runner calls this so CREATE-derived addresses match the account's
+    /// real nonce progression (EVM CREATE semantics).
+    pub fn with_create_nonce(mut self, nonce: u64) -> Self {
+        self.create_nonce = nonce;
+        self
+    }
+
+    /// Allocate and return the next CREATE nonce, incrementing the counter.
+    fn next_create_nonce(&mut self) -> u64 {
+        let n = self.create_nonce;
+        self.create_nonce = self.create_nonce.wrapping_add(1);
+        n
+    }
+
+    /// Flush the in-memory storage overlay to the persistent DB. Called by the
+    /// runner ONLY after the top-level frame succeeds. This is the commit step
+    /// of the storage journal: child REVERTs already discarded their writes via
+    /// the snapshot/restore in op_call/op_create, so only committed writes reach
+    /// the DB. Returns the number of slots flushed.
+    pub fn flush_storage(&mut self) -> usize {
+        let mut count = 0;
+        if let Some(db) = self.db {
+            for (key, value) in self.storage.drain() {
+                let _ = db.put_storage_slot(&self.address, &key, &value);
+                count += 1;
+            }
+        }
+        count
     }
 
     /// Create a VM with execution context (calldata, caller, value, address).
@@ -1070,7 +1107,13 @@ impl<'a> RstnVM<'a> {
                     self.memory[offset] = *bytes.last().unwrap_or(&0);
                 }
 
-                // -- Storage operations (persistent via RstnDB if attached) --
+                // -- Storage operations (overlay-based for REVERT safety) --
+                // SSTORE writes to the in-memory `storage` overlay FIRST. The
+                // overlay is snapshotted/restored around CALL/CREATE frames so a
+                // child REVERT discards its writes (EVM journal semantics). The
+                // overlay is flushed to the DB only when the top-level frame
+                // succeeds (see `flush_storage`). This fixes the bug where a
+                // child SSTORE persisted to the DB even after the child REVERTed.
                 OP_SSTORE => {
                     if self.static_flag {
                         return Err(VmError::Revert("SSTORE in static context".into()));
@@ -1080,9 +1123,6 @@ impl<'a> RstnVM<'a> {
                     let value = self.pop()?;
                     let mut key_arr = [0u8; 32];
                     key_arr[..key.len().min(32)].copy_from_slice(&key[..key.len().min(32)]);
-                    if let Some(db) = self.db {
-                        let _ = db.put_storage_slot(&self.address, &key_arr, &value);
-                    }
                     self.storage.insert(key_arr, value);
                 }
                 OP_SLOAD => {
@@ -1090,13 +1130,16 @@ impl<'a> RstnVM<'a> {
                     let key = self.pop()?;
                     let mut key_arr = [0u8; 32];
                     key_arr[..key.len().min(32)].copy_from_slice(&key[..key.len().min(32)]);
-                    let value = if let Some(db) = self.db {
-                        db.get_storage_slot(&self.address, &key_arr)
-                            .unwrap_or(None)
-                            .unwrap_or_else(|| self.storage.get(&key_arr).cloned().unwrap_or_default())
-                    } else {
-                        self.storage.get(&key_arr).cloned().unwrap_or_default()
-                    };
+                    // Read overlay first (uncommitted writes), then DB.
+                    let value = self.storage.get(&key_arr).cloned().unwrap_or_else(|| {
+                        if let Some(db) = self.db {
+                            db.get_storage_slot(&self.address, &key_arr)
+                                .unwrap_or(None)
+                                .unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        }
+                    });
                     self.push(value)?;
                 }
 
@@ -1459,12 +1502,25 @@ impl<'a> RstnVM<'a> {
         }
     }
 
-    /// Pop a 20-byte address from the stack (right-aligned in a 32-byte word).
+    /// Pop a 20-byte address from the stack. EVM addresses are right-aligned
+    /// in a 32-byte word (the low 20 bytes = bytes[12..32]). A previous
+    /// implementation took the LEFT bytes (`val[..20]`), which broke CALL,
+    /// BALANCE, EXTCODE*, and SELFDESTRUCT whenever the caller pushed a
+    /// properly left-padded address (as Solidity/ethers.js do).
     fn pop_addr(&mut self) -> Result<[u8; 20], VmError> {
         let val = self.pop()?;
         let mut addr = [0u8; 20];
-        let len = val.len().min(20);
-        addr[..len].copy_from_slice(&val[..len]);
+        // Right-align: take the last 20 bytes of the word. If the stack item
+        // is shorter than 20 bytes (e.g. a raw PUSH1), take its tail.
+        let src = if val.len() >= 20 {
+            &val[val.len() - 20..]
+        } else {
+            &val[..]
+        };
+        // Copy into the TAIL of the 20-byte address so short values land in
+        // the low bytes (matching EVM's right-aligned convention).
+        let off = 20usize.saturating_sub(src.len());
+        addr[off..].copy_from_slice(src);
         Ok(addr)
     }
 
@@ -1579,6 +1635,14 @@ impl<'a> RstnVM<'a> {
         // are saved/restored) to keep the implementation simple. A production
         // implementation would spawn a fresh VM; here we save the volatile
         // fields and restore them after the child returns.
+        //
+        // STORAGE JOURNAL: the child writes SSTOREs into the in-memory
+        // `storage` overlay (never directly to the DB). We snapshot the
+        // overlay before the child runs. On child SUCCESS, the child's writes
+        // remain in the overlay (committed at top-level flush). On child
+        // REVERT/failure, we restore the snapshot so the child's writes are
+        // discarded — matching EVM sub-call revert semantics. This fixes the
+        // bug where a child SSTORE persisted even after the child REVERTed.
         let saved_stack = self.stack.clone();
         let saved_memory = self.memory.clone();
         let saved_pc = self.pc;
@@ -1589,6 +1653,7 @@ impl<'a> RstnVM<'a> {
         let saved_address = self.address;
         let saved_static = self.static_flag;
         let saved_return_data = std::mem::take(&mut self.return_data);
+        let saved_storage = self.storage.clone();
 
         self.stack = Vec::with_capacity(1024);
         self.memory = Vec::with_capacity(4096);
@@ -1617,6 +1682,8 @@ impl<'a> RstnVM<'a> {
 
         match child_result {
             Ok(r) if r.success => {
+                // Keep the child's storage writes (they remain in the overlay
+                // and are committed at top-level flush).
                 self.return_data = r.output.clone();
                 let copy = ret_len.min(r.output.len());
                 self.mem_write(ret_off, &r.output[..copy])?;
@@ -1625,6 +1692,8 @@ impl<'a> RstnVM<'a> {
                 self.push(vec![0u8; 31].iter().chain(&[1u8]).cloned().collect())?;
             }
             _ => {
+                // Child failed/reverted: discard its storage writes.
+                self.storage = saved_storage;
                 self.return_data = Vec::new();
                 self.push(vec![0u8; 32])?;
             }
@@ -1657,14 +1726,23 @@ impl<'a> RstnVM<'a> {
         let init_code = self.mem_read(offset, length)?;
 
         // Compute the new contract address.
-        // CREATE:  keccak256(sender || nonce)[0..20]
+        // CREATE:  keccak256(sender || nonce)[0..20]  (EVM CREATE semantics)
         // CREATE2: keccak256(0xFF || sender || salt || keccak256(init_code))[0..20]
+        //
+        // The nonce MUST be the sender's real account nonce (incremented per
+        // CREATE), NOT a synthetic `block_number + address[0]`. The synthetic
+        // nonce collided: two CREATEs from the same account in the same block
+        // produced the same derived address -> code collision / overwrite.
+        // We read the real nonce from the host (preferred) or DB fallback.
         let new_addr: [u8; 20] = if opcode == OP_CREATE {
+            // Monotonic per-VM CREATE nonce (seeded from the account nonce by
+            // the runner via with_create_nonce). Each CREATE advances it so two
+            // CREATEs from the same sender in the same block produce different
+            // addresses (EVM CREATE semantics).
+            let nonce = self.next_create_nonce();
             let mut input = Vec::with_capacity(28);
             input.extend_from_slice(&self.address);
-            // Use a synthetic nonce from block_number + address hash for determinism.
-            let nonce = self.block_number.wrapping_add(self.address[0] as u64);
-            input.extend_from_slice(&nonce.to_le_bytes());
+            input.extend_from_slice(&nonce.to_be_bytes());
             let h = rstn_crypto::keccak512(&input);
             h[..20].try_into().unwrap_or([0u8; 20])
         } else {
@@ -1698,6 +1776,9 @@ impl<'a> RstnVM<'a> {
         let saved_address = self.address;
         let saved_static = self.static_flag;
         let saved_return_data = std::mem::take(&mut self.return_data);
+        // STORAGE JOURNAL: snapshot the overlay so a constructor REVERT
+        // discards its SSTOREs (EVM semantics).
+        let saved_storage = self.storage.clone();
 
         self.stack = Vec::with_capacity(1024);
         self.memory = Vec::with_capacity(4096);
@@ -1733,17 +1814,22 @@ impl<'a> RstnVM<'a> {
                     db.put_code(&new_addr, &runtime).is_ok()
                 } else { false };
                 if stored {
+                    // Keep the constructor's storage writes (committed at
+                    // top-level flush).
                     self.emitted_logs.extend(r.logs);
                     let mut addr_word = vec![0u8; 32];
                     addr_word[12..].copy_from_slice(&new_addr);
                     self.return_data = Vec::new();
                     self.push(addr_word)?;
                 } else {
+                    self.storage = saved_storage;
                     self.return_data = Vec::new();
                     self.push(vec![0u8; 32])?;
                 }
             }
             _ => {
+                // Constructor failed/reverted: discard its storage writes.
+                self.storage = saved_storage;
                 self.return_data = Vec::new();
                 self.push(vec![0u8; 32])?;
             }

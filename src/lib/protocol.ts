@@ -16,7 +16,8 @@ export const NETWORK_STATS = {
   transport:
     "libp2p Noise (X25519) + PQ wire-level para streams directos (Kyber768/Dilithium3) — broadcast gossipsub PQ pendiente (A1)",
   zkProofSystem: "zk-STARK (hash-based, PQ-resistente)",
-  dkgScheme: "LADKG (Lattice-based Asynchronous DKG)",
+  dkgScheme:
+    "Threshold encryption (DKG de producción en roadmap — actualmente PRNG determinístico)",
   lightClientAccumulator: "Merkle Mountain Ranges (Keccak-512)",
   shardCount: 64,
   shardSize: "2,048 TPS / shard",
@@ -300,7 +301,7 @@ export const SECURITY_MITIGATIONS = [
     threat:
       "Un atacante observa un swap pendiente en un bridge IBC y ejecuta un sandwich attack en la chain destino ANTES de que la transacción arrive. Los mempools cifrados no protegen contra cross-chain MEV — el leak ocurre antes del mempool.",
     solution:
-      "Commit-reveal cross-chain: el mensaje IBC incluye un hash commit, no el swap directo (G7). El swap se revela solo después de que el bloque destino está finalizado. Los relayers no pueden reordenar. Combinado con threshold encryption del mempool nativo (G13): el proponente no puede leer el payload antes del orden → MEV cross-domain imposible sin colusión de 2/3+ del comité.",
+      "Commit-reveal cross-chain: el mensaje IBC incluye un hash commit, no el swap directo (G7). El swap se revela solo después de que el bloque destino está finalizado. Los relayers no pueden reordenar. Combinado con threshold encryption del mempool nativo (G13): el proponente no puede leer el payload antes del orden → MEV cross-domain se mitiga estructuralmente (requiere colusión de 2/3+ del comité; la versión de producción necesita DKG real).",
     mechanism:
       "Cross-chain commit-reveal + IBC sealed messages + threshold mempool",
     riskBefore: "Alto",
@@ -438,7 +439,7 @@ export const DISEASES = [
     problem:
       "Los validadores pueden reordenar, insertar o censurar transacciones para extraer valor de los usuarios. Las blockchains pierden $1B+/año en MEV.",
     solution:
-      "Mempool con threshold encryption (G13): las transacciones se cifran antes de broadcast; solo el commitment (hash) es visible al proponente. Los payloads se desencriptan con t+1 shares (2/3+ del comité) DESPUÉS de finalizada la ronda. El proponente no puede leer el payload antes del orden → reordenar para MEV es estructuralmente imposible.",
+      "Mempool con threshold encryption (G13): las transacciones se cifran antes de broadcast; solo el commitment (hash) es visible al proponente. Los payloads se desencriptan con t+1 shares (2/3+ del comité) DESPUÉS de finalizada la ronda. El proponente no puede leer el payload antes del orden → reordenar para MEV se mitiga estructuralmente (la versión de producción requiere DKG real).",
     severity: "alto",
     status: "resuelto",
     category: "Economía",
@@ -535,9 +536,9 @@ export const ARCHITECTURE_LAYERS = [
     layer: 5,
     name: "Capa de Ejecución",
     description:
-      "EVM compatible con ejecución paralela. Access lists opcionales para paralelismo sin overhead obligatorio.",
+      "Subconjunto EVM (opcodes 0x00–0xEF) con ejecución paralela. Access lists opcionales para paralelismo sin overhead obligatorio.",
     tech: [
-      "EVM Compatible",
+      "Subconjunto EVM + extensiones PQ",
       "Parallel Execution",
       "DAG",
       "Access Lists (opcional)",
@@ -581,7 +582,7 @@ export const ARCHITECTURE_LAYERS = [
       "Lattice-VRF",
       "Keccak-512",
       "zk-STARK",
-      "LADKG (PQ threshold)",
+      "Threshold encryption (DKG en roadmap)",
     ],
   },
   {
@@ -785,8 +786,8 @@ export const NODE_STACK = [
   {
     layer: 5,
     name: "RSTN-VM",
-    tech: "EVM compatible · ejecución paralela · access lists opcionales",
-    role: "Ejecución de smart contracts EVM-compatible",
+    tech: "Subconjunto EVM (0x00–0xEF) + extensiones PQ · ejecución paralela · access lists opcionales",
+    role: "Ejecución de smart contracts (subconjunto EVM con firmas post-cuánticas)",
   },
   {
     layer: 4,
@@ -803,7 +804,7 @@ export const NODE_STACK = [
   {
     layer: 2,
     name: "Criptografía Post-Cuántica",
-    tech: "Dilithium3 (firmas) · SPHINCS+ (fallback hash-based) · Lattice-VRF · Kyber (KEM) · Keccak-512 · zk-STARK · LADKG (threshold PQ)",
+    tech: "Dilithium3 (firmas) · SPHINCS+ (fallback hash-based) · Lattice-VRF · Kyber (KEM) · Keccak-512 · zk-STARK · Threshold encryption (DKG en roadmap)",
     role: "Firmas, VRF, hashing, ZK y DKG resistentes a Shor. Fallback hash-based si Dilithium3 se compromete.",
   },
   {
@@ -1621,7 +1622,7 @@ async fn main() {
     name: "RSTN-VM (Smart Contracts)",
     install: "rstn deploy --contract",
     description:
-      "EVM compatible + recursos lineales estilo Move. Sin fricción.",
+      "Subconjunto EVM + recursos lineales estilo Move. Sin fricción.",
     features: [
       "Solidity+ compatible",
       "Move-style resources",
@@ -2052,7 +2053,7 @@ export const DEV_TRACKS = [
       {
         title: "RSTN-VM vs EVM",
         detail:
-          "RSTN-VM es EVM compatible: los contratos Solidity existen funcionan sin cambios. Diferencias: ejecución paralela opcional con access lists y verificación de firmas post-cuántica (OP_VALID_SIG).",
+          "RSTN-VM ejecuta un subconjunto de opcodes EVM (0x00–0xEF) con extensiones PQ (OP_VALID_SIG). No es 100% idéntico a Ethereum: usa Keccak-512 para hashes/addresses y firmas Dilithium3, por lo que los contratos Solidity requieren recompilar y adaptar el direccionamiento. Diferencias: ejecución paralela opcional con access lists y verificación de firmas post-cuántica.",
       },
       {
         title: "Access Lists (opcional)",
@@ -3069,7 +3070,7 @@ export const SECURITY_FRAMEWORK = {
           threat: "MEV — validadores extraen valor reordenando transacciones",
           severity: "Alto",
           mitigation:
-            "Mempool cifrado con threshold encryption (LADKG). Las txs se desencriptan DESPUÉS del ordenamiento. MEV imposible.",
+            "Mempool cifrado con threshold encryption. Las txs se desencriptan DESPUÉS del ordenamiento. Mitiga MEV estructuralmente; la versión de producción requiere DKG real (actualmente usa PRNG determinístico).",
           status: "Mitigado",
         },
         {
@@ -3233,7 +3234,7 @@ export const SECURITY_FRAMEWORK = {
           threat: "IA optimiza extracción de MEV en mensajes cross-shard",
           severity: "Alto",
           mitigation:
-            "Cross-shard receipts con commit-reveal: el estado futuro no es visible hasta el commit. Mempool cifrado (LADKG). La IA no puede modelar lo que no puede observar.",
+            "Cross-shard receipts con commit-reveal: el estado futuro no es visible hasta el commit. Mempool cifrado (threshold encryption). La IA no puede modelar lo que no puede observar.",
           status: "Mitigado",
         },
         {
@@ -3511,7 +3512,7 @@ export const COLD_START_BOOTSTRAP = {
       nodes: "4,128+ nodos",
       bftTolerance: "Meta — máxima tolerancia a fallos",
       purpose:
-        "Descentralización completa. 64 shards activos. 250K TPS. Sin equipo con poder especial. La red se gobierna a sí misma.",
+        "Descentralización completa. 64 shards activos. 250K TPS objetivo (no medido). Sin equipo con poder especial. La red se gobierna a sí misma.",
       canTransact: true,
       label: "Meta",
       color: "hsl(150 100% 45%)",

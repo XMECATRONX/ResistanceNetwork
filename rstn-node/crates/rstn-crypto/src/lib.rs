@@ -60,6 +60,24 @@ pub fn keccak512(data: &[u8]) -> [u8; HASH_SIZE] {
     out
 }
 
+// --- Keccak-256 Hash (EVM compatibility) -------------------
+// Used ONLY by the EVM-compatibility layer (eth_*, web3_sha3) so that
+// Ethereum tooling (Hardhat/Foundry/ethers.js) gets the hash it expects.
+// Native RSTN primitives (addresses, tx roots, VRF) use Keccak-512.
+
+pub const HASH256_SIZE: usize = 32;
+
+pub fn keccak256(data: &[u8]) -> [u8; HASH256_SIZE] {
+    use sha3::Keccak256;
+    use sha3::Digest;
+    let mut hasher = Keccak256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    let mut out = [0u8; HASH256_SIZE];
+    out.copy_from_slice(&result);
+    out
+}
+
 // --- Dilithium3 Signatures (NIST FIPS 204) ------------------
 // Category 2 security (128-bit post-quantum).
 // Public key: 1,952 bytes. Secret key: 4,032 bytes. Signature: 3,309 bytes.

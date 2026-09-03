@@ -279,7 +279,7 @@ export const HONEST_SECURITY_MITIGATIONS = [
     claimedSolution: "Formal verification + circuit breakers",
     realStatus: "implementado" as ClaimStatus,
     realMitigation:
-      "Circuit breakers on-chain ✅ (13 tests). Move-style resource types ✅: sistema de recursos lineales (no Copy, no Drop) sobre la VM EVM-compatible — move_resource atomiza transferencias (no double-spend a nivel de tipos), mint/burn con tracking de supply, verificación de no-duplicación. Formal verification foundation ✅: invariantes de VM (gas monotónica, stack/memory/call-depth bounds, terminación, determinismo) como property-based tests. Falta: embedding Coq/Lean con pruebas mecanizadas (multi-año).",
+      "Circuit breakers on-chain ✅ (13 tests). Move-style resource types ✅: sistema de recursos lineales (no Copy, no Drop) sobre la VM (subconjunto EVM) — move_resource atomiza transferencias (no double-spend a nivel de tipos), mint/burn con tracking de supply, verificación de no-duplicación. Formal verification foundation ✅: invariantes de VM (gas monotónica, stack/memory/call-depth bounds, terminación, determinismo) como property-based tests. Falta: embedding Coq/Lean con pruebas mecanizadas (multi-año).",
     riskBefore: "Alto",
     riskAfter: "Bajo",
     coverage: 80,
@@ -340,7 +340,7 @@ export const HONEST_SECURITY_MITIGATIONS = [
       "Cross-chain commit-reveal + IBC sealed messages + threshold mempool",
     realStatus: "implementado" as ClaimStatus,
     realMitigation:
-      "Commit-reveal cross-chain via IBC packet commitments ✅ (G7) + permissionless relayer market ✅. Threshold-encrypted mempool ✅ (G13): el proponente no puede leer el payload antes del orden → MEV imposible sin colusión 2/3+. Sealed IBC messages ✅: los packet commitments son opacos hasta la finalización. Cross-chain commit-reveal integrado al bridge ✅. Falta: marketplace de MEV shares cross-domain (research).",
+      "Commit-reveal cross-chain via IBC packet commitments ✅ (G7) + permissionless relayer market ✅. Threshold-encrypted mempool ✅ (G13): el proponente no puede leer el payload antes del orden → MEV se mitiga estructuralmente (requiere colusión 2/3+). Sealed IBC messages ✅: los packet commitments son opacos hasta la finalización. Cross-chain commit-reveal integrado al bridge ✅. Falta: DKG de producción para el threshold key (actualmente PRNG determinístico) y marketplace de MEV shares cross-domain (research).",
     riskBefore: "Alto",
     riskAfter: "Muy bajo",
     coverage: 90,

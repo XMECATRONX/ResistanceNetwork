@@ -233,7 +233,7 @@ export const ContractsView = () => {
             RstnVM —{" "}
           </span>
           {RPC_MODE
-            ? "Conectado a rstn-node. La VM ejecuta bytecode EVM-compatible con opcodes post-cuánticos (OP_VALID_SIG). Los deploys requieren firma Dilithium3."
+            ? "Conectado a rstn-node. La VM ejecuta un subconjunto de bytecode EVM (opcodes 0x00–0xEF) con opcodes post-cuánticos (OP_VALID_SIG). Los deploys requieren firma Dilithium3."
             : "Modo demostración. Conecta un nodo para ejecutar contratos reales en la RstnVM."}
         </p>
       </div>

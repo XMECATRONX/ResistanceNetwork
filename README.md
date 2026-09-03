@@ -29,7 +29,7 @@ RSTN is a sovereign Layer 1 blockchain designed with post-quantum cryptography f
 | **Cryptography** | Dilithium3 (FIPS 204) + Ed25519 hybrid · Keccak-512 · Kyber768 |
 | **Throughput** | 250,000 TPS target (64 shards × 2,048 TPS + DAG parallelism) |
 | **Sharding** | 64 dynamic shards · cross-shard lock-and-commit atomicity |
-| **VM** | EVM-compatible + Move-style linear resources · PQ sig opcode |
+| **VM** | Subconjunto EVM (opcodes 0x00–0xEF) + Move-style linear resources · PQ sig opcode · Keccak-512 |
 | **Token** | RSTN · 1B hard cap · zero minting · 50% fee burn (EIP-1559) |
 | **Bridge** | BTC (threshold ECDSA + SPV) · ETH (lock/burn) · Quantum Migration Program |
 | **License** | Apache 2.0 |
@@ -296,26 +296,26 @@ All primitives are post-quantum (NIST FIPS 203/204/205):
 ## Tokenomics
 
 ```
-Supply: 1,000,000,000 RSTN (hard cap, zero minting)
+Supply: 1,000,000,000 RSTN (hard cap, fixed genesis supply with protocol-controlled emission)
 
-Distribution:
-  55% — Proof of Participation (staking rewards, halving every 4 years)
-  20% — Community & Ecosystem (grants, governed on-chain)
-  10% — Team (vesting on-chain, 4 years, 12-month cliff)
-  10% — Treasury (governed on-chain from block 0)
-   5% — Testnet Airdrop (Proof of Participation)
+Distribution (Satoshi model — single source of truth: WHITEPAPER §8):
+   95% — Proof of Participation (950M, staking rewards, halving every 4 years)
+    5% — Testnet Airdrop (50M, bootstrap seed to verified node operators)
+
+   Zero team allocation. Zero ecosystem fund. Zero genesis treasury.
+   The team earns RSTN only by operating the genesis validator (work, not pre-allocation).
 
 Fee mechanics:
-  50% gas burned (EIP-1559 style)
-  30% to block validator
-  20% to treasury
+   50% gas burned (EIP-1559 style, base fee floored at 1 gwei)
+   30% to block validator
+   20% to on-chain security reserve (born from network usage, NOT a genesis pre-allocation)
 
 Bridge revenue (60/30/10):
-  60% — Buyback & Burn of RSTN
-  30% — Staker rewards
-  10% — Treasury (audits, bug bounty, development)
+   60% — Buyback & Burn of RSTN
+   30% — Staker rewards
+   10% — Security reserve (bug bounty, incident response)
 
-Zero ICO. Zero pre-sale. Zero VC. Fair launch.
+Zero ICO. Zero pre-sale. Zero VC. Fair launch. No capturable treasury in block 0.
 ```
 
 ---
