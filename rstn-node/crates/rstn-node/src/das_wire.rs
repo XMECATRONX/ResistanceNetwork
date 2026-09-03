@@ -50,6 +50,7 @@ pub struct DasShardResponse {
 impl DasShardResponse {
     /// Convert the wire response into the `PeerShardResponse` the
     /// `DistributedSampler` expects.
+    #[allow(dead_code)]
     pub fn into_peer_response(self) -> PeerShardResponse {
         PeerShardResponse {
             index: self.index,
