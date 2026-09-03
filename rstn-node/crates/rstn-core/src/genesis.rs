@@ -120,6 +120,7 @@ fn build_genesis_transactions(
             signature: Dilithium3Signature([0u8; SIG_SIZE]),
             hybrid_signature: None,
             hybrid_pubkey: None,
+            gas_used: None,
         });
     }
 
@@ -138,6 +139,7 @@ fn build_genesis_transactions(
             signature: Dilithium3Signature([0u8; SIG_SIZE]),
             hybrid_signature: None,
             hybrid_pubkey: None,
+            gas_used: None,
         });
     }
 
