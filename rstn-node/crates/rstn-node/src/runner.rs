@@ -863,7 +863,7 @@ async fn try_catchup(
                     // delegators (tracked in pending_rewards for later claim).
                     let staking_ratio_bps = compute_staking_ratio_bps(state);
                     let block_reward = compute_block_reward_from_reserve(
-                        engine, staking_ratio_bps, block_total_tip,
+                        &mut engine, staking_ratio_bps, block_total_tip,
                     );
                     // Pass tips + block reward through distribute_rewards so
                     // commission applies to the total. The leader's commission
@@ -1254,7 +1254,7 @@ pub async fn start_block_production(
                                 // validator gets up to 2% more to incentivize staking.
                                 let staking_ratio_bps = compute_staking_ratio_bps(&state);
                                 let block_reward = compute_block_reward_from_reserve(
-                                    engine, staking_ratio_bps, block_total_tip,
+                                    &mut engine, staking_ratio_bps, block_total_tip,
                                 );
                                 // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): pass
                                 // tips + block reward through distribute_rewards so
@@ -1414,7 +1414,7 @@ pub async fn start_block_production(
                             let validator_addr = rstn_crypto::derive_address(&block.header.validator);
                             let staking_ratio_bps = compute_staking_ratio_bps(&state);
                             let block_reward = compute_block_reward_from_reserve(
-                                engine, staking_ratio_bps, block_total_tip,
+                                &mut engine, staking_ratio_bps, block_total_tip,
                             );
                             // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): pass
                             // tips + block reward through distribute_rewards so
@@ -1694,7 +1694,7 @@ pub async fn start_block_production(
                                                                         let validator_addr = rstn_crypto::derive_address(&block.header.validator);
                                                                         let staking_ratio_bps = compute_staking_ratio_bps(&state);
                                                                         let block_reward = compute_block_reward_from_reserve(
-                                                                            engine, staking_ratio_bps, block_total_tip,
+                                                                            &mut engine, staking_ratio_bps, block_total_tip,
                                                                         );
                                                                         // CONSISTENT REWARD DISTRIBUTION (Gap 4 fix): pass
                                                                         // tips + block reward through distribute_rewards so

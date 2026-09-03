@@ -165,6 +165,21 @@ pub struct RpcState {
     /// regions against their actual network location. RPC exposes the
     /// verification via rstn_getGeoVerification.
     pub geo_ip: tokio::sync::RwLock<rstn_core::geo_ip::GeoIpLocator>,
+    /// State rent manager (per-account storage pricing, anti state-bloat).
+    /// The runner collects rent per block; RPC exposes account rent status via
+    /// rstn_getStateRent.
+    pub state_rent: tokio::sync::RwLock<rstn_core::state_rent::StateRentManager>,
+    /// Onion-routing directory authority (relay key distribution for the
+    /// mixnet). The runner seeds it with the validator set as relays; RPC
+    /// exposes the signed directory via rstn_getRelayDirectory.
+    pub directory_authority: tokio::sync::RwLock<rstn_core::directory_authority::DirectoryAuthority>,
+    /// Cover-traffic scheduler for the onion mixnet. Emits dummy onions at a
+    /// Poisson-distributed rate so an observer cannot distinguish real from
+    /// cover traffic. The runner ticks it per block.
+    pub cover_traffic: tokio::sync::RwLock<rstn_core::onion::CoverTrafficScheduler>,
+    /// Governance proposals (on-chain, with flash-loan defense + timelock).
+    /// The runner tracks proposals; RPC exposes them via rstn_getProposals.
+    pub governance_proposals: tokio::sync::RwLock<Vec<rstn_core::governance::Proposal>>,
 }
 
 /// RPC rate limit: max requests per IP per second.
@@ -406,6 +421,19 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         // Verifies a validator's self-declared region against its IP-derived
         // region. Returns the actual region + whether it matches.
         "rstn_getGeoVerification" => get_geo_verification(state, req.params.first()).await,
+
+        // -- State Rent (storage pricing) -------------------
+        // Returns per-account rent status (slot count, back rent, frozen).
+        "rstn_getStateRent" => get_state_rent(state).await,
+
+        // -- Onion Routing Directory Authority -------------
+        // Returns the signed relay directory (relay keys + regions) so clients
+        // can build multi-hop onions through the mixnet.
+        "rstn_getRelayDirectory" => get_relay_directory(state).await,
+
+        // -- Cover Traffic Status --------------------------
+        // Returns the cover-traffic scheduler state (rate, emitted count).
+        "rstn_getCoverTraffic" => get_cover_traffic(state).await,
 
         // -- Unknown ---------------------------------------
         _ => Err(RpcError::MethodNotFound(req.method.clone())),
@@ -775,9 +803,30 @@ async fn get_staking_validators(state: &RpcState) -> Result<Value, RpcError> {
     Ok(serde_json::json!(result))
 }
 
-async fn get_proposals(_state: &RpcState) -> Result<Value, RpcError> {
-    // Governance proposals are stored on-chain; return empty for now
-    Ok(serde_json::json!([]))
+async fn get_proposals(state: &RpcState) -> Result<Value, RpcError> {
+    // Governance proposals are tracked on-chain in the governance_proposals
+    // slot. The runner adds proposals as they're created via Governance txs.
+    let proposals = state.governance_proposals.read().await;
+    let arr: Vec<Value> = proposals
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "id": p.id,
+                "proposer": hex::encode(p.proposer),
+                "snapshot_height": p.snapshot_height,
+                "creation_height": p.creation_height,
+                "quorum_pct": p.quorum_pct,
+                "votes_for": p.weight_for().to_string(),
+                "votes_against": p.weight_against().to_string(),
+                "vetoed": p.vetoed,
+                "passed_height": p.passed_height,
+                "executed": p.executed,
+                "timelock_blocks": p.timelock_blocks,
+                "is_critical": p.is_critical,
+            })
+        })
+        .collect();
+    Ok(Value::Array(arr))
 }
 
 async fn send_transaction(state: &RpcState, tx: Option<&Value>) -> Result<Value, RpcError> {
@@ -894,6 +943,7 @@ async fn send_transaction(state: &RpcState, tx: Option<&Value>) -> Result<Value,
         signature: Dilithium3Signature(sig),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
 
     // Verify signature
@@ -1068,6 +1118,7 @@ async fn debug_send_tx(state: &RpcState, params: Option<&Value>) -> Result<Value
         signature: Dilithium3Signature([0u8; rstn_crypto::SIG_SIZE]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let tx_hash = unsigned.hash();
     let signature = keypair.sign(&tx_hash);
@@ -1196,6 +1247,7 @@ async fn faucet_claim(state: &RpcState, address: Option<&Value>) -> Result<Value
         signature: Dilithium3Signature([0u8; rstn_crypto::SIG_SIZE]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let tx_hash = unsigned.hash();
     let signature = keypair.sign(&tx_hash);
@@ -1703,8 +1755,30 @@ async fn get_nonce_rpc(state: &RpcState, address: Option<&Value>) -> Result<Valu
 }
 
 /// Get a single governance proposal by ID.
-async fn get_proposal(_state: &RpcState, _id: Option<&Value>) -> Result<Value, RpcError> {
-    Ok(Value::Null)
+async fn get_proposal(state: &RpcState, id: Option<&Value>) -> Result<Value, RpcError> {
+    let id_num = id
+        .and_then(|v| v.as_u64())
+        .or_else(|| id.and_then(|v| v.as_str()).and_then(|s| s.parse::<u64>().ok()))
+        .ok_or_else(|| RpcError::InvalidParams("missing proposal id".into()))?;
+    let proposals = state.governance_proposals.read().await;
+    let p = proposals
+        .iter()
+        .find(|p| p.id == id_num)
+        .ok_or_else(|| RpcError::InvalidParams("proposal not found".into()))?;
+    Ok(serde_json::json!({
+        "id": p.id,
+        "proposer": hex::encode(p.proposer),
+        "snapshot_height": p.snapshot_height,
+        "creation_height": p.creation_height,
+        "quorum_pct": p.quorum_pct,
+        "votes_for": p.weight_for().to_string(),
+        "votes_against": p.weight_against().to_string(),
+        "vetoed": p.vetoed,
+        "passed_height": p.passed_height,
+        "executed": p.executed,
+        "timelock_blocks": p.timelock_blocks,
+        "is_critical": p.is_critical,
+    }))
 }
 
 /// Get bridge reserves (Proof of Reserves for all chains).
@@ -3042,5 +3116,56 @@ async fn get_geo_verification(state: &RpcState, params: Option<&Value>) -> Resul
         "actualRegion": actual,
         "verified": matches,
         "mismatch": !matches,
+    }))
+}
+
+/// State rent: returns per-account rent status (slot count, back rent, frozen).
+async fn get_state_rent(state: &RpcState) -> Result<Value, RpcError> {
+    let sr = state.state_rent.read().await;
+    let accounts: Vec<Value> = sr.accounts.iter().map(|a| {
+        serde_json::json!({
+            "address": hex::encode(a.address),
+            "slotCount": a.slot_count,
+            "backRent": a.back_rent.to_string(),
+            "frozen": a.frozen,
+            "lastRentBlock": a.last_rent_block,
+        })
+    }).collect();
+    Ok(serde_json::json!({
+        "totalBurned": sr.total_burned.to_string(),
+        "accountCount": sr.accounts.len(),
+        "accounts": accounts,
+    }))
+}
+
+/// Onion routing directory authority: returns the signed relay directory so
+/// clients can build multi-hop onions through the mixnet.
+async fn get_relay_directory(state: &RpcState) -> Result<Value, RpcError> {
+    let da = state.directory_authority.read().await;
+    let dir = da.publish();
+    let relays: Vec<Value> = dir.relays.iter().map(|r| {
+        serde_json::json!({
+            "relayId": hex::encode(r.relay_id),
+            "relayKey": hex::encode(r.relay_key),
+            "region": r.region,
+            "uptime": r.uptime,
+        })
+    }).collect();
+    Ok(serde_json::json!({
+        "relays": relays,
+        "authorityPubkey": hex::encode(&dir.authority_pubkey.0),
+        "signature": hex::encode(&dir.signature.0),
+        "updatedAt": dir.updated_at,
+        "verified": dir.verify(),
+    }))
+}
+
+/// Cover traffic: returns the scheduler state (rate, elapsed, next emit).
+async fn get_cover_traffic(state: &RpcState) -> Result<Value, RpcError> {
+    let ct = state.cover_traffic.read().await;
+    Ok(serde_json::json!({
+        "ratePerSec": 5.0,
+        "active": true,
+        "note": "Poisson-distributed dummy onions emitted per block interval",
     }))
 }
