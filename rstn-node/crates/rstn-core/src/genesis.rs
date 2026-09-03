@@ -54,6 +54,8 @@ pub fn build_genesis_block(config: &GenesisConfig) -> Block {
             epoch: 0,
             round: 0,
             data_root: [0u8; 64], // genesis has no body to encode
+            vrf_output: [0u8; 64], // genesis has no VRF (fixed seed = 0)
+            vrf_proof: Dilithium3Signature([0u8; SIG_SIZE]), // genesis has no VRF proof
         },
         transactions,
     }
