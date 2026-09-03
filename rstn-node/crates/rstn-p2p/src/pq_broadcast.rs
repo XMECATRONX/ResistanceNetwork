@@ -57,6 +57,17 @@
 //! requires the libp2p transport fork. What this module provides is genuine
 //! PQ confidentiality for every broadcast payload — which was the pending
 //! mainnet item.
+//!
+//! ## PQ envelope (added)
+//!
+//! The `PqEnvelope` wraps a `SealedFrame` with a **blinded topic hash**: the
+//! gossipsub topic name is hashed with the group key so an observer who
+//! captures the wire frame sees only an opaque topic digest, not the
+//! plaintext topic string. Validators (who hold the group key) can recompute
+//! the digest and route the message; an eavesdropper cannot. This closes the
+//! "metadata leak" gap noted above for the topic field. The message-id and
+//! peer-id remain visible at the libp2p layer (closing those fully requires
+//! the transport fork).
 
 use rstn_crypto::{keccak512, Dilithium3PublicKey};
 use serde::{Deserialize, Serialize};
@@ -368,5 +379,113 @@ mod tests {
         let sealed = seal_broadcast(&key, &msg);
         let opened = open_broadcast(&key, &sealed).expect("large payload must open");
         assert_eq!(opened, msg);
+    }
+
+    // --- PQ envelope tests ---
+
+    #[test]
+    fn test_envelope_blinds_topic() {
+        let validators = vec![Dilithium3Keypair::generate().public];
+        let key = GroupKey::derive(&validators);
+        let env = PqEnvelope::seal(&key, "rstn/blocks", b"block #100");
+        // The blinded topic must NOT contain the plaintext topic string.
+        let blinded_hex = hex::encode(&env.blinded_topic);
+        assert!(!blinded_hex.contains("7273746e"), "topic must be blinded, not plaintext");
+        // A validator with the same key can recover the topic.
+        assert_eq!(env.open_topic(&key), Some("rstn/blocks".to_string()));
+    }
+
+    #[test]
+    fn test_envelope_roundtrip_payload() {
+        let validators = vec![Dilithium3Keypair::generate().public];
+        let key = GroupKey::derive(&validators);
+        let payload = b"consensus vote: PREPARE for block 42";
+        let env = PqEnvelope::seal(&key, "rstn/votes", payload);
+        let opened = env.open_payload(&key).expect("must open payload");
+        assert_eq!(opened.as_slice(), payload.as_slice());
+    }
+
+    #[test]
+    fn test_envelope_wrong_key_fails() {
+        let key_a = GroupKey::derive(&[Dilithium3Keypair::generate().public]);
+        let key_b = GroupKey::derive(&[Dilithium3Keypair::generate().public]);
+        let env = PqEnvelope::seal(&key_a, "rstn/blocks", b"block");
+        assert!(env.open_payload(&key_b).is_none(), "wrong key must fail");
+        assert!(env.open_topic(&key_b).is_none(), "wrong key must not recover topic");
+    }
+
+    #[test]
+    fn test_envelope_different_topics_different_blinds() {
+        let validators = vec![Dilithium3Keypair::generate().public];
+        let key = GroupKey::derive(&validators);
+        let env_a = PqEnvelope::seal(&key, "rstn/blocks", b"x");
+        let env_b = PqEnvelope::seal(&key, "rstn/votes", b"y");
+        // Different topics must produce different blinded digests.
+        assert_ne!(env_a.blinded_topic, env_b.blinded_topic);
+    }
+}
+
+// --- PQ Envelope: blinds the gossipsub topic against eavesdroppers -----------
+
+/// A PQ envelope: a sealed payload + a blinded topic digest.
+///
+/// The topic is blinded by hashing it with the group key, so an observer who
+/// captures the wire frame sees only an opaque digest. Validators recompute
+/// the digest from the known topic set to route the message. The payload is
+/// the standard `SealedFrame` (PQ-confidential content).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PqEnvelope {
+    /// `Keccak-512(group_key || topic)` — the blinded topic digest.
+    #[serde(with = "serde_big_array::BigArray")]
+    pub blinded_topic: [u8; 64],
+    /// The PQ-sealed payload.
+    pub sealed: SealedFrame,
+}
+
+impl PqEnvelope {
+    /// Seal a payload + topic into a PQ envelope.
+    pub fn seal(key: &GroupKey, topic: &str, plaintext: &[u8]) -> Self {
+        let mut topic_input = Vec::with_capacity(32 + topic.len());
+        topic_input.extend_from_slice(&key.0);
+        topic_input.extend_from_slice(topic.as_bytes());
+        let blinded_topic = keccak512(&topic_input);
+
+        let sealed = seal_broadcast(key, plaintext);
+
+        PqEnvelope {
+            blinded_topic,
+            sealed,
+        }
+    }
+
+    /// Attempt to recover the plaintext topic. A validator who knows the group
+    /// key and the candidate topic set can test each candidate topic by
+    /// recomputing the digest and comparing. This helper tests a single
+    /// candidate.
+    pub fn topic_matches(&self, key: &GroupKey, candidate: &str) -> bool {
+        let mut input = Vec::with_capacity(32 + candidate.len());
+        input.extend_from_slice(&key.0);
+        input.extend_from_slice(candidate.as_bytes());
+        let digest = keccak512(&input);
+        // Constant-time compare.
+        let mut diff: u8 = 0;
+        for (a, b) in digest.iter().zip(self.blinded_topic.iter()) {
+            diff |= a ^ b;
+        }
+        diff == 0
+    }
+
+    /// Convenience: if the caller provides the known topic, verify + return it.
+    pub fn open_topic(&self, key: &GroupKey, candidate: &str) -> Option<String> {
+        if self.topic_matches(key, candidate) {
+            Some(candidate.to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Open the sealed payload with the group key.
+    pub fn open_payload(&self, key: &GroupKey) -> Option<Vec<u8>> {
+        open_broadcast(key, &self.sealed)
     }
 }

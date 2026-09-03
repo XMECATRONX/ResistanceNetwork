@@ -246,7 +246,7 @@ const PortfolioTab = () => {
       label: "Delegado",
       value: wp.delegated,
       suffix: "RSTN",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
     },
     {
       label: "Recompensas",

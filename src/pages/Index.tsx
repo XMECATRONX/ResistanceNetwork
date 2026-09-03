@@ -21,6 +21,7 @@ import { StakingView } from "@/components/views/StakingView";
 import { SecurityView } from "@/components/views/SecurityView";
 import { BridgeView } from "@/components/views/BridgeView";
 import { DexView } from "@/components/views/DexView";
+import { StablecoinView } from "@/components/views/StablecoinView";
 import { BridgeLivePanel } from "@/components/views/BridgeLivePanel";
 import { FaucetView } from "@/components/views/FaucetView";
 import { ContractsView } from "@/components/views/ContractsView";
@@ -83,6 +84,10 @@ const VIEW_META: Record<ViewId, { titleKey: string; subtitleKey: string }> = {
   dex: {
     titleKey: "views.dex.title",
     subtitleKey: "views.dex.subtitle",
+  },
+  stablecoin: {
+    titleKey: "views.stablecoin.title",
+    subtitleKey: "views.stablecoin.subtitle",
   },
   faucet: {
     titleKey: "views.faucet.title",
@@ -187,6 +192,7 @@ const Index = () => {
                   </>
                 )}
                 {activeView === "dex" && <DexView />}
+                {activeView === "stablecoin" && <StablecoinView />}
                 {activeView === "faucet" && <FaucetView />}
                 {activeView === "contracts" && <ContractsView />}
                 {activeView === "transparency" && <TransparencyView />}

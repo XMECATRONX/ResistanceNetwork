@@ -734,6 +734,24 @@ async fn sync_g15_state(
             tracing::debug!("Cover traffic: {} dummy onions emitted for block #{}", emitted, height);
         }
     }
+    // 6. rUSD stablecoin — feed the consensus-aggregated median price to the
+    //    stablecoin manager. When the price moves materially (>0.5%) or the
+    //    on-chain feed approaches staleness, the manager records the write so
+    //    the on-chain oracle adapter stays fresh. This is the node-side
+    //    integration: the consensus median is the source of truth, and the
+    //    node writes it on-chain via a system oracle-update transaction.
+    {
+        let oracle = state.oracle.read().await;
+        let mut sc = state.stablecoin.write().await;
+        if sc.should_write_price(&oracle, height) {
+            let price = oracle.current_price();
+            sc.record_write(price, height);
+            tracing::debug!(
+                "rUSD: oracle price written to on-chain adapter for block #{} (price={})",
+                height, price
+            );
+        }
+    }
 }
 
 /// `block_hash`, persist it to the DB, and broadcast it to peers. Called

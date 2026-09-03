@@ -1,10 +1,10 @@
 //! G14 — Forced-inclusion pool (censorship resistance: N+1).
 //!
-//! ## Purpose — "Enf.10 Censura y resistencia"
+//! ## Purpose — "Enf.10 Censorship resistance"
 //!
-//! The claim on the landing page: "Consenso resistente a censura con
-//! forced-inclusion pool. Cualquier transacción puede ser forzada al bloque
-//! en N+1 si fue censurada en N."
+//! The claim on the landing page: "Censorship-resistant consensus with
+//! forced-inclusion pool. Any transaction can be forced into the block
+//! at N+1 if it was censored at N."
 //!
 //! This module makes that claim true. The mechanism:
 //!

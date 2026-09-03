@@ -75,12 +75,12 @@ export const BridgeView = () => {
             <div className="card p-4 text-center">
               <Sparkles
                 className="mx-auto h-5 w-5"
-                style={{ color: "hsl(185 100% 55%)" }}
+                style={{ color: "hsl(150 100% 55%)" }}
                 strokeWidth={1.5}
               />
               <p
                 className="mt-2 font-mono text-xl font-bold"
-                style={{ color: "hsl(185 100% 55%)" }}
+                style={{ color: "hsl(150 100% 55%)" }}
               >
                 6
               </p>
@@ -375,25 +375,25 @@ export const BridgeView = () => {
         className="panel relative overflow-hidden p-6"
         style={{
           boxShadow: "var(--shadow-md)",
-          borderColor: "hsl(185 100% 55% / 0.25)",
+          borderColor: "hsl(150 100% 55% / 0.25)",
         }}
       >
         <div
           className="absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-[0.05] blur-3xl"
-          style={{ background: "hsl(185 100% 55%)" }}
+          style={{ background: "hsl(150 100% 55%)" }}
         />
         <div className="relative">
           <div className="flex items-center gap-3">
             <div
               className="flex h-12 w-12 items-center justify-center rounded-lg"
               style={{
-                background: "hsl(185 100% 55% / 0.10)",
-                border: "1px solid hsl(185 100% 55% / 0.20)",
+                background: "hsl(150 100% 55% / 0.10)",
+                border: "1px solid hsl(150 100% 55% / 0.20)",
               }}
             >
               <Sparkles
                 className="h-6 w-6"
-                style={{ color: "hsl(185 100% 55%)" }}
+                style={{ color: "hsl(150 100% 55%)" }}
                 strokeWidth={1.5}
               />
             </div>
@@ -410,8 +410,8 @@ export const BridgeView = () => {
           <div
             className="mt-5 rounded-md border p-4"
             style={{
-              borderColor: "hsl(185 100% 55% / 0.20)",
-              background: "hsl(185 100% 55% / 0.04)",
+              borderColor: "hsl(150 100% 55% / 0.20)",
+              background: "hsl(150 100% 55% / 0.04)",
             }}
           >
             <p className="font-body text-sm leading-relaxed text-foreground">
@@ -436,9 +436,9 @@ export const BridgeView = () => {
                   <div
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-bold"
                     style={{
-                      background: "hsl(185 100% 55% / 0.15)",
-                      color: "hsl(185 100% 55%)",
-                      border: "1px solid hsl(185 100% 55% / 0.30)",
+                      background: "hsl(150 100% 55% / 0.15)",
+                      color: "hsl(150 100% 55%)",
+                      border: "1px solid hsl(150 100% 55% / 0.30)",
                     }}
                   >
                     {step.step}
@@ -471,13 +471,13 @@ export const BridgeView = () => {
             <div
               className="rounded-md border p-4"
               style={{
-                borderColor: "hsl(185 100% 55% / 0.20)",
-                background: "hsl(185 100% 55% / 0.04)",
+                borderColor: "hsl(150 100% 55% / 0.20)",
+                background: "hsl(150 100% 55% / 0.04)",
               }}
             >
               <h3
                 className="font-display text-xs font-semibold"
-                style={{ color: "hsl(185 100% 55%)" }}
+                style={{ color: "hsl(150 100% 55%)" }}
               >
                 Timeline de activación
               </h3>
@@ -739,14 +739,14 @@ export const BridgeView = () => {
           <div
             className="card-sig p-4"
             style={{
-              borderColor: "hsl(185 100% 55% / 0.20)",
-              background: "hsl(185 100% 55% / 0.04)",
+              borderColor: "hsl(150 100% 55% / 0.20)",
+              background: "hsl(150 100% 55% / 0.04)",
             }}
           >
             <div className="flex items-center gap-2">
               <Shield
                 className="h-4 w-4"
-                style={{ color: "hsl(185 100% 55%)" }}
+                style={{ color: "hsl(150 100% 55%)" }}
                 strokeWidth={1.5}
               />
               <h3 className="font-display text-xs font-semibold text-foreground">
@@ -760,14 +760,14 @@ export const BridgeView = () => {
           <div
             className="card-sig p-4"
             style={{
-              borderColor: "hsl(185 100% 55% / 0.20)",
-              background: "hsl(185 100% 55% / 0.04)",
+              borderColor: "hsl(150 100% 55% / 0.20)",
+              background: "hsl(150 100% 55% / 0.04)",
             }}
           >
             <div className="flex items-center gap-2">
               <Lock
                 className="h-4 w-4"
-                style={{ color: "hsl(185 100% 55%)" }}
+                style={{ color: "hsl(150 100% 55%)" }}
                 strokeWidth={1.5}
               />
               <h3 className="font-display text-xs font-semibold text-foreground">
@@ -955,7 +955,7 @@ export const BridgeView = () => {
               <div className="flex items-center gap-2 mb-1">
                 <div
                   className="h-2 w-2 rounded-full"
-                  style={{ background: "hsl(185 100% 55%)" }}
+                  style={{ background: "hsl(150 100% 55%)" }}
                 />
                 <span className="font-body text-xs font-medium text-foreground">
                   Bridge Buyback Burn
@@ -975,19 +975,19 @@ export const BridgeView = () => {
         <div
           className="mt-4 flex items-start gap-2 rounded-md border p-4"
           style={{
-            borderColor: "hsl(185 100% 55% / 0.2)",
-            background: "hsl(185 100% 55% / 0.03)",
+            borderColor: "hsl(150 100% 55% / 0.2)",
+            background: "hsl(150 100% 55% / 0.03)",
           }}
         >
           <AlertTriangle
             className="mt-0.5 h-4 w-4 shrink-0"
-            style={{ color: "hsl(185 100% 55%)" }}
+            style={{ color: "hsl(150 100% 55%)" }}
             strokeWidth={1.5}
           />
           <div className="space-y-1">
             <h3
               className="font-display text-xs font-semibold"
-              style={{ color: "hsl(185 100% 55%)" }}
+              style={{ color: "hsl(150 100% 55%)" }}
             >
               Compliance — No es un security
             </h3>

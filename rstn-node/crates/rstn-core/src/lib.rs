@@ -31,6 +31,7 @@ pub mod genesis_exit;  // Gradual genesis validator stake reduction (anti-centra
 pub mod multisig;      // Public multisig with independent (non-team) signers
 pub mod state_rent;    // State rent — per-account storage pricing (anti state-bloat)
 pub mod reserve;       // Reserve distribution (Satoshi model, not minting) + burn accounting
+pub mod stablecoin;    // Over-collateralized rUSD stablecoin (DAI model) + oracle feed
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;

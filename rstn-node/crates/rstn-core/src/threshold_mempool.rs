@@ -1,10 +1,10 @@
 //! G13 — Threshold-encrypted mempool (MEV elimination).
 //!
-//! ## Purpose — "Enf.4 MEV = imposible"
+//! ## Purpose — "Enf.4 MEV = impossible"
 //!
-//! The claim on the landing page: "Mempool encriptado con threshold
-//! encryption. Las transacciones solo se desencriptan DESPUÉS de ser
-//! ordenadas y finalizada la ronda. MEV = imposible."
+//! The claim on the landing page: "Mempool encrypted with threshold
+//! encryption. Transactions are only decrypted AFTER being
+//! ordered and the round finalized. MEV = impossible."
 //!
 //! This module makes that claim true. The mechanism:
 //!

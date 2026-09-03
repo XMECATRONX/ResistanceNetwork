@@ -17,7 +17,7 @@ import {
 
 const STATUS_BADGE: Record<string, string> = {
   implementado: "hsl(150 100% 45%)",
-  testnet: "hsl(185 100% 55%)",
+  testnet: "hsl(150 100% 55%)",
   parcial: "hsl(150 70% 50%)",
   roadmap: "hsl(150 100% 45%)",
   "no-implementado": "hsl(5 80% 55%)",

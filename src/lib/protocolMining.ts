@@ -32,7 +32,7 @@ export const PARTICIPATION_TIERS = [
     rewards: "Proporcional al stake delegado",
     slashing: "Solo si el validador delegado es slashed",
     icon: "Users",
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     tier: "Light Node",
@@ -64,11 +64,11 @@ export const MINING_MODEL = {
     "Delegación líquida desde 1 RSTN. Sin lock-up obligatorio. Retiro en 1 época.",
 } as const;
 
-// Los 3 caminos para obtener RSTN post-génesis — honesto, sin prometer "no
-// comprar" como si fuera PoW. En PoS el capital entra tarde o temprano; ser
-// honestos al respecto es más fuerte que negarlo. La barrera REAL de
-// participación es 1 RSTN (delegación), no 32,000. El stake de validador se
-// acumula con el tiempo, no se compra por adelantado.
+// The 3 paths to obtain RSTN post-genesis — honest, without promising "no
+// buying" as if it were PoW. In PoS capital enters sooner or later; being
+// honest about it is stronger than denying it. The REAL participation
+// barrier is 1 RSTN (delegation), not 32,000. The validator stake is
+// accumulated over time, not bought upfront.
 export const POST_GENESIS_PATHS = [
   {
     path: "Delegar desde 1 RSTN",
@@ -76,7 +76,7 @@ export const POST_GENESIS_PATHS = [
     detail:
       "Participa desde el día 1 sin correr hardware. Delegas a un validador y recibes recompensas proporcionales. Es la forma en que el 99% de los usuarios participa. No necesitas 32,000 RSTN para empezar.",
     icon: "Users",
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     path: "Acumular recompensas hasta 32,000",

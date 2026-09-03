@@ -565,6 +565,13 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
         cover_traffic: tokio::sync::RwLock::new(rstn_core::onion::CoverTrafficScheduler::new(5.0, 42)),
         // Governance proposals (on-chain, flash-loan defense + timelock).
         governance_proposals: tokio::sync::RwLock::new(Vec::new()),
+        // rUSD over-collateralized stablecoin manager (DAI model). The runner
+        // writes the consensus median price to this manager every block.
+        stablecoin: tokio::sync::RwLock::new(
+            rstn_core::stablecoin::StablecoinManager::new(
+                rstn_core::stablecoin::StablecoinConfig::default(),
+            ),
+        ),
     });
 
     // C1 startup guard: refuse to start in production mode if the bridge

@@ -154,7 +154,7 @@ export const ExplorerView = () => {
       label: "TPS actual",
       value: explorerStats.tps,
       icon: Activity,
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       suffix: "",
     },
     {
@@ -168,7 +168,7 @@ export const ExplorerView = () => {
       label: "Txs pendientes",
       value: explorerStats.pendingTxs,
       icon: Clock,
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       suffix: "",
     },
   ];
@@ -411,7 +411,7 @@ export const ExplorerView = () => {
                                   width: `${Math.min((parseFloat(block.gasUsed) / 30) * 100, 100)}%`,
                                   background:
                                     parseFloat(block.gasUsed) > 15
-                                      ? "hsl(185 100% 55%)"
+                                      ? "hsl(150 100% 55%)"
                                       : "hsl(150 100% 45%)",
                                 }}
                               />

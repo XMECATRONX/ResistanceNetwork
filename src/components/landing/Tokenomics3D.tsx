@@ -184,7 +184,7 @@ export const Tokenomics3D = ({ coinOnly = false }: { coinOnly?: boolean }) => {
                 y1="5"
                 x2="300"
                 y2="5"
-                stroke="hsl(185 100% 55% / 0.3)"
+                stroke="hsl(150 100% 55% / 0.3)"
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
@@ -193,7 +193,7 @@ export const Tokenomics3D = ({ coinOnly = false }: { coinOnly?: boolean }) => {
                 y="3"
                 textAnchor="end"
                 className="font-mono"
-                fill="hsl(185 100% 55%)"
+                fill="hsl(150 100% 55%)"
                 fontSize="7"
               >
                 {t("animations.tokenomics.hardCap")}

@@ -115,13 +115,13 @@ export const TokenomicsEconomics = () => {
             <p className="mt-2 font-body text-xs leading-relaxed text-muted-foreground">
               {tk("stakingMonetaryBody")}
             </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="rounded-md border border-border bg-surface-1 px-3 py-2">
                 <span className="label-muted text-[10px]">
                   {tk("stakingBurn")}
                 </span>
                 <p className="mt-0.5 font-mono text-sm font-bold text-primary">
-                  50%
+                  100%
                 </p>
               </div>
               <div className="rounded-md border border-border bg-surface-1 px-3 py-2">
@@ -129,23 +129,15 @@ export const TokenomicsEconomics = () => {
                   {tk("stakingValidators")}
                 </span>
                 <p className="mt-0.5 font-mono text-sm font-bold text-foreground">
-                  30%
-                </p>
-              </div>
-              <div className="rounded-md border border-border bg-surface-1 px-3 py-2">
-                <span className="label-muted text-[10px]">
-                  {tk("stakingTreasury")}
-                </span>
-                <p className="mt-0.5 font-mono text-sm font-bold text-accent">
-                  20%
+                  100%
                 </p>
               </div>
               <div className="rounded-md border border-border bg-surface-1 px-3 py-2">
                 <span className="label-muted text-[10px]">
                   {tk("stakingMinting")}
                 </span>
-                <p className="mt-0.5 font-mono text-sm font-bold text-destructive">
-                  0%
+                <p className="mt-0.5 font-mono text-sm font-bold text-accent">
+                  ≤2%
                 </p>
               </div>
             </div>
@@ -167,18 +159,13 @@ export const TokenomicsEconomics = () => {
               {[
                 {
                   label: tk("monetaryFeeBurn"),
-                  pct: "50%",
+                  pct: "100%",
                   color: "bg-primary",
                 },
                 {
                   label: tk("monetaryFeeValidators"),
-                  pct: "30%",
+                  pct: "100%",
                   color: "bg-foreground",
-                },
-                {
-                  label: tk("monetaryFeeTreasury"),
-                  pct: "20%",
-                  color: "bg-violet",
                 },
               ].map((f) => (
                 <div key={f.label}>

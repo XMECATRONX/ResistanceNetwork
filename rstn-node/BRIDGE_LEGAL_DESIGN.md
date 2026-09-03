@@ -1,171 +1,171 @@
-# RSTN Bridge -- Decisi?n Arquitect?nica
+# RSTN Bridge — Architectural Decision
 
-> **Versión:** 1.0
-> **Decisi?n:** Bridge descentralizado puro (protocol-pure), sin operador central
-> **Estado:** Aprobado -- implementado en `rstn-bridge` crate
-
----
-
-## Resumen
-
-El bridge de RSTN es un **protocolo descentralizado puro**, no un servicio
-operado por una entidad. Esta decisi?n reduce dr?sticamente el riesgo legal de
-money transmitter licensing y AML/KYC compliance.
+> **Version:** 1.0
+> **Decision:** Pure decentralized bridge (protocol-pure), no central operator
+> **Status:** Approved — implemented in `rstn-bridge` crate
 
 ---
 
-## Por qu? esta decisi?n
+## Summary
 
-### El problema
+The RSTN bridge is a **pure decentralized protocol**, not a service operated
+by an entity. This decision drastically reduces the legal risk of money
+transmitter licensing and AML/KYC compliance.
 
-Un bridge cross-chain transfiere valor real (BTC, ETH) entre blockchains. Bajo
-ley federal de EE.UU. (BSA/FinCEN), esto califica como **money transmission**:
+---
 
-- Requiere licencia de money transmitter en 49 de 50 estados
-- Requiere programa AML con KYC
-- Requiere SAR/CTR reporting
-- Costo: $5M-$15M + 12-24 meses
+## Why this decision
 
-### La soluci?n: Protocolo puro
+### The problem
 
-Si el bridge es **c?digo ejecutado por validadores** (no un servicio operado por
-una entidad), el riesgo legal cambia fundamentalmente:
+A cross-chain bridge transfers real value (BTC, ETH) between blockchains.
+Under U.S. federal law (BSA/FinCEN), this qualifies as **money transmission**:
 
-| Aspecto | Bridge Operado | Bridge Protocolo Puro |
+- Requires a money transmitter license in 49 of 50 states
+- Requires an AML program with KYC
+- Requires SAR/CTR reporting
+- Cost: $5M-$15M + 12-24 months
+
+### The solution: Pure protocol
+
+If the bridge is **code executed by validators** (not a service operated by
+an entity), the legal risk changes fundamentally:
+
+| Aspect | Operated bridge | Pure protocol bridge |
 |---------|---------------|----------------------|
-| Quien custodia | La entidad operadora | El conjunto de validadores (2/3+ BFT) |
-| Quien transmite | La entidad | El protocolo (c?digo neutral) |
-| Money transmitter? | S? | Probablemente NO (ver Thorchain) |
-| KYC requerido? | S? | No a nivel protocolo |
-| Licencia estatal? | S? | Probablemente NO |
-| Riesgo legal | ALTO | MEDIO-BAJO |
+| Who custodies | The operating entity | The validator set (2/3+ BFT) |
+| Who transmits | The entity | The protocol (neutral code) |
+| Money transmitter? | Yes | Probably NO (see Thorchain) |
+| KYC required? | Yes | Not at the protocol level |
+| State license? | Yes | Probably NO |
+| Legal risk | HIGH | MEDIUM-LOW |
 
-### Precedente: Thorchain
+### Precedent: Thorchain
 
-Thorchain (RUNE) opera un bridge descentralizado BTC<->ETH<->BNB sin KYC. Su modelo
-legal se basa en:
+Thorchain (RUNE) operates a decentralized BTC<->ETH<->BNB bridge without KYC.
+Its legal model is based on:
 
-1. El protocolo es c?digo neutral, no una entidad
-2. Los validadores ejecutan c?digo, no custodian fondos
-3. No hay empresa que "opera" el bridge
-4. La SEC no ha tomado acci?n contra Thorchain (hasta 2026)
+1. The protocol is neutral code, not an entity
+2. Validators execute code, they do not custody funds
+3. There is no company that "operates" the bridge
+4. The SEC has not taken action against Thorchain (as of 2026)
 
-Resistance sigue este modelo, mejor?ndolo con:
-- **Firmas post-cu?nticas** (Dilithium3 en lugar de ECDSA threshold)
-- **Proof of Reserves on-chain** (invariante `locked == minted - burned`)
-- **Slashing autom?tico** para validadores fraudulentos
-- **Emergency pause** si se viola el invariante
+Resistance follows this model, improving it with:
+- **Post-quantum signatures** (Dilithium3 instead of ECDSA threshold)
+- **On-chain Proof of Reserves** (invariant `locked == minted - burned`)
+- **Automatic slashing** for fraudulent validators
+- **Emergency pause** if the invariant is violated
 
 ---
 
-## C?mo funciona el protocolo
+## How the protocol works
 
 ### Lock-and-Mint (Source -> Resistance)
 
 ```text
-1. Usuario bloquea BTC en vault address (P2WSH multisig 2/3+)
-2. Usuario env?a lock proof a Resistance via bridge tx
-3. Validadores verifican el lock proof (SPV o committee attestation)
-4. 2/3+ validadores firman autorizaci?n de mint
-5. VM de Resistance mintea wBTC al usuario
+1. User locks BTC in a vault address (P2WSH multisig 2/3+)
+2. User sends a lock proof to Resistance via a bridge tx
+3. Validators verify the lock proof (SPV or committee attestation)
+4. 2/3+ validators sign a mint authorization
+5. Resistance VM mints wBTC to the user
 6. Proof of Reserves: locked += amount, minted += amount
-7. Invariante verificada: locked == minted - burned
+7. Invariant verified: locked == minted - burned
 ```
 
 ### Burn-and-Release (Resistance -> Source)
 
 ```text
-1. Usuario quema wBTC en Resistance via bridge tx
-2. Validadores verifican el burn (on-chain, determinista)
-3. 2/3+ validadores firman autorizaci?n de release
-4. Vault en source chain libera BTC al usuario
+1. User burns wBTC on Resistance via a bridge tx
+2. Validators verify the burn (on-chain, deterministic)
+3. 2/3+ validators sign a release authorization
+4. Vault on source chain releases BTC to the user
 5. Proof of Reserves: locked -= amount, burned += amount
-6. Invariante verificada: locked == minted - burned
+6. Invariant verified: locked == minted - burned
 ```
 
-### Seguridad
+### Security
 
-- **No single point of failure**: 2/3+ BFT threshold para toda operaci?n
-- **Replay prevention**: cada source txid solo puede reclamarse una vez
-- **Proof of Reserves**: invariante on-chain verificable por cualquiera
-- **Slashing**: validadores que firman fraudulenamente son slashed
-- **Emergency pause**: si la invariante se viola, el bridge se pausa
+- **No single point of failure**: 2/3+ BFT threshold for every operation
+- **Replay prevention**: each source txid can only be claimed once
+- **Proof of Reserves**: on-chain invariant verifiable by anyone
+- **Slashing**: validators that sign fraudulently are slashed
+- **Emergency pause**: if the invariant is violated, the bridge pauses
 
 ---
 
-## Compliance: qu? queda fuera del protocolo
+## Compliance: what stays out of the protocol
 
-El protocolo es **neutral**. No implementa KYC porque:
+The protocol is **neutral**. It does not implement KYC because:
 
-1. **El protocolo no es una entidad** -- es c?digo. No puede tener un programa AML.
-2. **Los validadores no son VASPs** -- ejecutan c?digo, no custodian fondos de usuarios.
-3. **La wallet no es VASP** -- es non-custodial, el usuario tiene sus claves.
+1. **The protocol is not an entity** — it is code. It cannot have an AML program.
+2. **Validators are not VASPs** — they execute code, they do not custody user funds.
+3. **The wallet is not a VASP** — it is non-custodial, the user holds their keys.
 
-### Responsabilidad de compliance
+### Compliance responsibility
 
-| Componente | Responsable | Compliance |
+| Component | Responsible | Compliance |
 |-----------|------------|------------|
-| Protocolo (bridge code) | Nadie -- es c?digo neutral | N/A |
-| Validadores | Cada operador individual | Depende de jurisdicci?n |
-| Wallet Chrome | Non-custodial -- no VASP | No requiere KYC |
-| Frontend/dApp | El operador del frontend | Puede implementar geo-block |
-| Exchange integrado | El exchange | KYC/AML completo |
+| Protocol (bridge code) | No one — it is neutral code | N/A |
+| Validators | Each individual operator | Depends on jurisdiction |
+| Chrome wallet | Non-custodial — not a VASP | No KYC required |
+| Frontend/dApp | The frontend operator | May implement geo-block |
+| Integrated exchange | The exchange | Full KYC/AML |
 
-### Recomendaci?n para mainnet
+### Recommendation for mainnet
 
-1. **No implementar KYC en el protocolo** -- mantiene el dise?o neutral
-2. **Geo-block opcional en el frontend** -- el operador del frontend puede bloquear jurisdicciones
-3. **Proof of Reserves p?blico** -- transparencia total para reguladores
-4. **Opini?n legal formal** antes de mainnet con bridge activo
+1. **Do not implement KYC in the protocol** — keeps the design neutral
+2. **Optional geo-block on the frontend** — the frontend operator can block jurisdictions
+3. **Public Proof of Reserves** — total transparency for regulators
+4. **Formal legal opinion** before mainnet with the bridge active
 
 ---
 
-## Implementaci?n
+## Implementation
 
-El crate `rstn-bridge` implementa:
+The `rstn-bridge` crate implements:
 
-- `BridgeState` -- estado global del bridge (reservas, operaciones pendientes)
-- `BridgeOperation` -- operaci?n lock-mint o burn-release
-- `ProofOfReserves` -- reservas por chain con invariante verificable
-- `BridgeSignature` -- firma Dilithium3 de validador autorizando operaci?n
-- Tests unitarios: replay prevention, threshold, invariant, duplicate sigs
+- `BridgeState` — global bridge state (reserves, pending operations)
+- `BridgeOperation` — lock-mint or burn-release operation
+- `ProofOfReserves` — per-chain reserves with verifiable invariant
+- `BridgeSignature` — Dilithium3 signature from a validator authorizing an operation
+- Unit tests: replay prevention, threshold, invariant, duplicate sigs
 
-### Integraci?n con el nodo
+### Integration with the node
 
-El bridge se integra como un **built-in contract** en la VM de Resistance:
+The bridge integrates as a **built-in contract** in the Resistance VM:
 
 ```rust
-// En rstn-vm, el bridge es un contract predeployed en address 0xbridge
-// Las bridge txs usan tx_type = Contract con payload codificado
-// El VM llama a BridgeState::execute_operation() cuando procesa la tx
+// In rstn-vm, the bridge is a predeployed contract at address 0xbridge
+// Bridge txs use tx_type = Contract with an encoded payload
+// The VM calls BridgeState::execute_operation() when processing the tx
 ```
 
 ---
 
-## Riesgo residual
+## Residual risk
 
-Esta decisi?n **reduce** el riesgo pero no lo elimina:
+This decision **reduces** risk but does not eliminate it:
 
-1. **FinCEN puede reclamar jurisdicci?n** -- argumentando "control de facto"
-2. **Estados individuales pueden interpretar diferente** -- especialmente NY (BitLicense)
-3. **MiCA en EU puede requerir compliance** -- para VASPs que interact?an con el bridge
-4. **Opini?n legal formal es necesaria** antes de mainnet
+1. **FinCEN may claim jurisdiction** — arguing "control de facto"
+2. **Individual states may interpret differently** — especially NY (BitLicense)
+3. **MiCA in the EU may require compliance** — for VASPs that interact with the bridge
+4. **A formal legal opinion is necessary** before mainnet
 
-### Mitigaciones
+### Mitigations
 
-- Documentar que el bridge es protocolo puro (este documento)
-- Proof of Reserves p?blico y auditable
-- No operar el frontend desde EE.UU. inicialmente
-- Obtener No-Action Letter de FinCEN antes de activar bridge en mainnet
+- Document that the bridge is a pure protocol (this document)
+- Public and auditable Proof of Reserves
+- Do not operate the frontend from the U.S. initially
+- Obtain a FinCEN No-Action Letter before activating the bridge on mainnet
 
 ---
 
-## Conclusi?n
+## Conclusion
 
-**Decisi?n: Bridge descentralizado puro, sin KYC a nivel protocolo.**
+**Decision: Pure decentralized bridge, no KYC at the protocol level.**
 
-- Implementado en `rstn-bridge` crate
-- Reduce riesgo de money transmitter
-- Mantiene el protocolo neutral
-- Compliance es responsabilidad del frontend, no del protocolo
-- Opini?n legal formal requerida antes de mainnet
+- Implemented in the `rstn-bridge` crate
+- Reduces money transmitter risk
+- Keeps the protocol neutral
+- Compliance is the frontend's responsibility, not the protocol's
+- Formal legal opinion required before mainnet

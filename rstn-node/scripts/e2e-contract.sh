@@ -59,11 +59,13 @@ fi
 # --- 3. Deploy contract via debug tx --------------------------------------
 echo ""
 echo "[3/4] Deploying contract (ContractDeploy tx)..."
-# For ContractDeploy, 'to' is empty (contracts have no recipient).
-# The init bytecode goes in 'payload' so the node's CREATE handler executes it
-# and stores the returned runtime code at the deterministic contract address.
+# ContractDeploy uses a zero recipient address (20 bytes). The node's CREATE
+# handler ignores 'to' and computes the contract address from sender+nonce.
+# The init bytecode goes in 'payload' so the VM executes it and stores the
+# returned runtime code at the deterministic contract address.
+ZERO_ADDR="rstn1000000000000000000000000000000000000000"
 DEPLOY=$(curl -s -X POST "$RPC" -H "Content-Type: application/json" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"rstn_debugSendTx\",\"params\":[{\"to\":\"\",\"value\":\"0\",\"tx_type\":\"ContractDeploy\",\"payload\":\"$EVM_BYTECODE\"}]}")
+  -d "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"rstn_debugSendTx\",\"params\":[{\"to\":\"$ZERO_ADDR\",\"value\":\"0\",\"tx_type\":\"ContractDeploy\",\"payload\":\"$EVM_BYTECODE\"}]}")
 echo "  -> $DEPLOY"
 if echo "$DEPLOY" | grep -q '"error"'; then
   echo "[FAIL] Deploy returned error — contract deploy not accepted by node"

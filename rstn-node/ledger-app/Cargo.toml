@@ -14,6 +14,14 @@ description = "RSTN Ledger BOLOS app — on-device Dilithium3 (FIPS 204) signing
 [lib]
 path = "src/lib.rs"
 
+# The on-device binary entrypoint. Compiled ONLY under the BOLOS SDK
+# toolchain (cargo ledger build), not by the node workspace cargo build.
+# The main.rs contains the USB HID APDU I/O loop + on-screen confirmation.
+[[bin]]
+name = "rstn-ledger-app"
+path = "src/main.rs"
+required-features = ["bolos"]
+
 [dependencies]
 # Post-quantum signatures (NIST FIPS 204 -- ML-DSA-65 / Dilithium3 standard).
 # Same wire format as the node + wallet (pk=1952, sk=4032, sig=3309).
@@ -29,3 +37,7 @@ default = []
 # lattice signing). When disabled, the SE attempts full in-SE signing (slow
 # on current ST33 hardware; see LEDGER_BOLOS_FIRMWARE.md §2).
 hybrid-attestation = []
+# BOLOS SDK feature — enables the on-device main.rs binary (USB HID I/O,
+# screen rendering, button polling). Only available under the Ledger
+# toolchain; the node workspace does not enable this.
+bolos = []

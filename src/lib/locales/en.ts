@@ -33,11 +33,16 @@ const en = {
     roadmap: "Roadmap",
     build: "Build",
     terminal: "Terminal",
+    ariaMain: "Main navigation",
+    ariaSections: "Section navigation",
+    ariaMobile: "Mobile navigation",
+    ariaFooter: "Footer navigation",
   },
 
   // Landing — hero
   hero: {
     badge: "Sovereign Layer 1 · Post-Quantum Cryptography",
+    badgeLive: "Live testnet · Post-Quantum Cryptography",
     title:
       "The blockchain with <span class='gradient-text'>post-quantum resistance</span>",
     subtitle:
@@ -48,6 +53,13 @@ const en = {
       finality: "Finality",
       pqCoverage: "PQ Primitives",
       shards: "Shards",
+      validators: "Validators",
+      live: "live",
+      tpsTarget: "mainnet target",
+      tpsLive: "measured",
+      finalityTestnet: "testnet measured",
+      finalityLive: "measured",
+      validatorsLive: "testnet active",
     },
   },
 
@@ -76,8 +88,9 @@ const en = {
     },
     security: {
       label: "Defense in depth",
-      title: "12 attack vectors — mitigated",
-      desc: "Every known attack vector has a mitigation designed into the protocol. Defense in depth: 4 fully mitigated, 6 partial, 2 on roadmap. Not security through obscurity — verifiable defense in depth.",
+      title: "15 attack vectors — mitigated",
+      desc: "Every known attack vector has a mitigation designed into the protocol and verified in Rust. 15 fully mitigated — not security through obscurity, but verifiable defense in depth.",
+      coverage: "coverage",
     },
     migration: {
       label: "Quantum Migration Program",
@@ -345,25 +358,24 @@ const en = {
       stakingVotingVal: "Quadratic",
       stakingThreshold: "Threshold",
       stakingThresholdVal: "51% IDs",
-      stakingMonetary: "Monetary Policy",
+      stakingMonetary: "Monetary Policy v3",
       stakingMonetaryBody:
-        "Hard cap of 1B RSTN. Zero minting. 50% gas burn. Reserve with halving every 4 years. Validators earn 30% fees + reserve distribution.",
-      stakingBurn: "Burn",
-      stakingValidators: "Validators",
-      stakingTreasury: "Security Reserve",
-      stakingMinting: "Minting",
-      monetaryTitle: "Monetary Policy — Hard Cap + Halving + Burn",
+        "Hard cap of 1B RSTN. Zero minting. EIP-1559 with 1 gwei floor (burn never dies). Dynamic inflation with 2% cap (66% staking target). Tip 100% to validator, burn 100% of base fee — separate streams, no competition.",
+      stakingBurn: "Base Fee (Burn)",
+      stakingValidators: "Tip (Validator)",
+      stakingMinting: "Dynamic Inflation",
+      monetaryTitle:
+        "Monetary Policy v3 — EIP-1559 with Floor + Dynamic Inflation",
       monetaryDesc:
-        "Zero minting. Fixed supply of 1B RSTN. 50% gas burn. Reserve distribution with halving every 4 years.",
-      monetaryFeeSplitTitle: "Fee Split",
-      monetaryFeeBurn: "Burn (destroyed)",
-      monetaryFeeValidators: "Validators",
-      monetaryFeeTreasury: "Security Reserve",
+        "Zero minting. Fixed supply of 1B RSTN. EIP-1559 base fee with 1 gwei floor (burn survives scaling). Tip 100% to validator. Dynamic inflation with 2% cap, 66% staking target.",
+      monetaryFeeSplitTitle: "EIP-1559 Model",
+      monetaryFeeBurn: "Base Fee → 100% Burn",
+      monetaryFeeValidators: "Tip → 100% Validator",
       monetaryFeeSplitBody:
-        "Each transaction burns 50% of gas. Validators earn 30% + reserve distribution. Two income sources sustain security.",
-      monetaryHalvingTitle: "Reserve Halving",
+        "Burn and tip are SEPARATE streams. The base fee (with 1 gwei floor) is 100% burned. The tip goes 100% to the validator. They don't compete — fixes Solana's error (50% burn starved validators) and Ethereum's error (burn died without floor).",
+      monetaryHalvingTitle: "Halving + Dynamic Inflation",
       monetaryHalvingBody:
-        "950M RSTN of reserve is distributed to stakers with halving every 4 years. Converges to 0% in ~24 years (6 halvings). Afterwards the network becomes deflationary: the 50% gas burn exceeds the remaining emission.",
+        "950M RSTN with halving every 4 years + dynamic multiplier: if staking <66%, up to +2% extra (2% cap, not 20% like Cosmos). Converges to 0% in ~24 years. Afterwards the network is deflationary: the base fee burn exceeds the remaining distribution.",
       monetaryZeroMintTitle: "Zero Minting",
       monetaryZeroMintHardCap: "Hard Cap: 1,000,000,000 RSTN",
       monetaryZeroMintHardCapBody:
@@ -371,9 +383,9 @@ const en = {
       monetaryZeroMintMint: "Minting: 0%",
       monetaryZeroMintMintBody:
         "No new tokens are created. The reserve is distributed, not minted.",
-      monetaryZeroMintBurn: "Permanent burn",
+      monetaryZeroMintBurn: "Burn with 1 gwei floor",
       monetaryZeroMintBurnBody:
-        "50% of gas destroyed per tx. When burn > distribution → decreasing supply.",
+        "EIP-1559 base fee with 1 gwei floor. The burn never reaches zero — survives scaling. When burn > distribution → decreasing supply.",
       ossTitle: "Open-Source & Disclaimer",
       ossDesc:
         "Resistance Network is free software. The protocol exists as open source, auditable by anyone.",
@@ -452,12 +464,12 @@ const en = {
       finality: "Finality",
       transportTitle: "P2P Transport Layers",
       transportDesc:
-        "libp2p with hybrid post-quantum encryption. Every node-to-node connection is protected.",
+        "libp2p base transport (Noise/X25519) with PQ confidentiality layered at the application level: PQ wire-level encryption for direct peer streams and PQ gossipsub broadcast under a committee group key.",
       l4Layer: "L4 — Transport",
       l4Desc: "Stream multiplexing, 0-RTT, NAT mobility.",
       l3Layer: "L3 — Security",
       l3Desc:
-        "Hybrid post-quantum handshake. If X25519 is broken, Kyber holds.",
+        "Hybrid PQ handshake (Kyber768+X25519+Dilithium3) for direct streams + PQ broadcast group key. Base Noise is classical; full replacement requires a libp2p fork.",
       l2Layer: "L2 — Gossip",
       l2Tech2: "Topics: blocks, txs, consensus, votes",
       l2Desc: "Block and transaction propagation with peer scoring.",

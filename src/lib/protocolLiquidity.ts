@@ -10,7 +10,7 @@
 // per RSTN because it assumes slashing + uptime + hardware.
 
 export const LIQUIDITY_PARTICIPATION = {
-  // ── UI labels (es) ──
+  // ── UI labels (es locale) ──
   ui: {
     title: "Liquidity Provision = Participación",
     desc: "Los LP rewards salen del 95% Proof of Participation — no de un bucket nuevo. Sin tercer bucket, sin inflación oculta. El modelo Satoshi se mantiene intacto.",

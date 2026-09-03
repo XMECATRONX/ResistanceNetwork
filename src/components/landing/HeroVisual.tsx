@@ -57,11 +57,20 @@ export const HeroVisual = () => {
     const resizeCanvas = () => {
       width = canvas.offsetWidth;
       height = canvas.offsetHeight;
+      if (width === 0 || height === 0) return;
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resizeCanvas();
+
+    // The container's real size can settle AFTER mount (grid layout,
+    // font loading, etc). A plain window "resize" listener misses that,
+    // leaving the canvas's internal resolution smaller than its CSS box —
+    // the drawing then gets stretched/shifted toward a corner. Watch the
+    // element itself instead so the canvas always matches its true size.
+    const resizeObserver = new ResizeObserver(() => resizeCanvas());
+    resizeObserver.observe(canvas);
 
     // Lattice — frames the focal symbol
     const grid = isMobile ? 3 : 4;
@@ -127,6 +136,10 @@ export const HeroVisual = () => {
     let lastTime = 0;
     let raf = 0;
 
+    // Subtle node-to-node messages traveling along lattice edges
+    const messages: { ei: number; t: number; speed: number }[] = [];
+    let nextMsgAt = 1800;
+
     const project = (p: Pt) => {
       const cosY = Math.cos(rotY),
         sinY = Math.sin(rotY);
@@ -181,14 +194,99 @@ export const HeroVisual = () => {
         ctx.fill();
       });
 
-      // --- Symbol </> — vibrant matrix green, 3D, rotates WITH the lattice ---
-      const sProj = symVerts.map(project);
-      const cProj = project(corePt);
-
       // Core gentle pulse — "less is more". No fracture, no halo.
       const pulsePhase = (time / 5200) % 1; // 0..1 loop (slow)
       const pulse = 0.5 - 0.5 * Math.cos(pulsePhase * Math.PI * 2);
       const coreOp = 0.6 + 0.32 * pulse;
+
+      // --- Sacred energy ray — a faint vertical beam from the core ---
+      // The lattice cradles something sacred: a barely-there pulse of light.
+      {
+        const cScr = project(corePt);
+        const beamH = 190 * cScr.scale;
+        const beamW = 12 * cScr.scale;
+        const beamOp = 0.035 + 0.02 * pulse;
+        const grad = ctx.createLinearGradient(
+          cScr.x,
+          cScr.y - beamH,
+          cScr.x,
+          cScr.y + beamH,
+        );
+        grad.addColorStop(0, "rgba(0, 255, 136, 0)");
+        grad.addColorStop(0.5, `rgba(0, 255, 136, ${beamOp})`);
+        grad.addColorStop(1, "rgba(0, 255, 136, 0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(cScr.x, cScr.y, beamW, beamH, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // --- Subtle node-to-node messages along lattice edges ---
+      // Occasionally a tiny pulse travels an edge — nodes whispering.
+      if (time > nextMsgAt && messages.length < 4) {
+        messages.push({
+          ei: Math.floor(Math.random() * edges.length),
+          t: 0,
+          speed: 0.35 + Math.random() * 0.3,
+        });
+        nextMsgAt = time + 900 + Math.random() * 1800;
+      }
+      // Track recently-activated nodes for a brief flash on receipt
+      const flashNodes = new Set<number>();
+      for (let mi = messages.length - 1; mi >= 0; mi--) {
+        const m = messages[mi];
+        m.t += dt * m.speed;
+        if (m.t >= 1) {
+          const [a, b] = edges[m.ei];
+          flashNodes.add(b);
+          messages.splice(mi, 1);
+          continue;
+        }
+        const [a, b] = edges[m.ei];
+        const pa = proj[a];
+        const pb = proj[b];
+        const mx = pa.x + (pb.x - pa.x) * m.t;
+        const my = pa.y + (pb.y - pa.y) * m.t;
+        const fade =
+          m.t < 0.15 ? m.t / 0.15 : m.t > 0.85 ? (1 - m.t) / 0.15 : 1;
+        // Glowing trail behind the pulse
+        const trailLen = 0.12;
+        const ts = Math.max(0, m.t - trailLen);
+        const tx = pa.x + (pb.x - pa.x) * ts;
+        const ty = pa.y + (pb.y - pa.y) * ts;
+        const tgrad = ctx.createLinearGradient(tx, ty, mx, my);
+        tgrad.addColorStop(0, "rgba(0, 255, 136, 0)");
+        tgrad.addColorStop(1, `rgba(0, 255, 136, ${0.5 * fade})`);
+        ctx.strokeStyle = tgrad;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(mx, my);
+        ctx.stroke();
+        // Bright pulse head with soft glow
+        ctx.shadowColor = "rgba(0, 255, 136, 0.8)";
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = `rgba(0, 255, 136, ${0.85 * fade})`;
+        ctx.beginPath();
+        ctx.arc(mx, my, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      // Flash receiving nodes briefly
+      flashNodes.forEach((ni) => {
+        const p = proj[ni];
+        ctx.shadowColor = "rgba(0, 255, 136, 0.7)";
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = "rgba(0, 255, 136, 0.7)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      // --- Symbol </> — vibrant matrix green, 3D, rotates WITH the lattice ---
+      const sProj = symVerts.map(project);
+      const cProj = project(corePt);
 
       ctx.shadowColor = "rgba(0, 255, 136, 0.4)";
       ctx.shadowBlur = 10;
@@ -238,6 +336,7 @@ export const HeroVisual = () => {
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resizeCanvas);
+      resizeObserver.disconnect();
     };
   }, [isMobile]);
 
@@ -254,21 +353,10 @@ export const HeroVisual = () => {
 
   return (
     <div
-      className="relative mx-auto flex h-[320px] sm:h-[380px] lg:h-[440px] w-full items-center justify-center overflow-hidden"
+      className="relative mx-auto flex h-[320px] sm:h-[380px] lg:h-[440px] w-full items-center justify-center"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Ambient green glow — marks the focal core */}
-      <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-60"
-        style={{
-          width: 340,
-          height: 340,
-          background:
-            "radial-gradient(circle, hsl(150 100% 50% / 0.22) 0%, transparent 70%)",
-          filter: "blur(48px)",
-        }}
-      />
       {/* Unified 3D scene: lattice + </> rotating together */}
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
     </div>

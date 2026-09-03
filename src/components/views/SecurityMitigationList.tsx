@@ -22,7 +22,7 @@ const STATUS_STYLE: Record<
     Icon: CheckCircle2,
   },
   testnet: {
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
     label: "Testnet",
     Icon: CheckCircle2,
   },

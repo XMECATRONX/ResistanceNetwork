@@ -269,3 +269,33 @@ RSTN demuestra una arquitectura criptográfica post-cuántica **madura y bien ra
 3. **Fuzzing extendido 24h+** de los surfaces criptográficos, del puente, del VM y del consenso (los targets están listos en `rstn-node/fuzz/` — falta correr las corridas extendidas en CI).
 4. **Firmware on-device del Ledger app** (BOLOS SDK, Rust) — el spec está en `LEDGER_BOLOS_FIRMWARE.md`; la app on-device es el entregable de firmware.
 5. **DKG para el threshold mempool** — el threshold key hoy usa un PRNG determinístico; un LADKG (distributed key generation) generaría el key sin que ninguna parte conozca el key completo. El diseño está documentado en `threshold_mempool.rs` §"What is NOT claimed".
+
+---
+
+## 8. Estado verificado de módulos "scaffolding" y roadmap mainnet (ronda 8, 2026-09-01)
+
+Auditoría línea por línea de los módulos marcados como "presentes pero no cableados" y de los ítems pendientes para mainnet. No se presentan aspiraciones como hechos.
+
+### 8.1 Módulos presentes — estado real verificado
+
+| Módulo | Archivo | Estado verificado | ¿Bloquea compilación? |
+|---|---|---|---|
+| **rstn-sol-transpiler** | `crates/rstn-sol-transpiler/src/lib.rs` | Andamiaje de transpilador Solidity→bytecode. Compila como crate separado, **no** es dependencia del nodo. No se invoca en `rstn-node` ni en `rstn-vm`. | No |
+| **rstn-ledger** | `crates/rstn-ledger/src/lib.rs` | Trait `LedgerTransport` definido (APDU send/recv). La app on-device real (`ledger-app/`) es un binario separado que se compila con el SDK BOLOS de Ledger, **no** con `cargo build` del nodo. | No |
+| **fuzz targets** | `fuzz/fuzz_targets/{consensus,vm,protocol}.rs` | Targets escritos y completos. Requieren `cargo +nightly fuzz` y corridas de 24h+ en CI. No son parte del build normal (`cargo build`). | No |
+| **Onion routing (Nym-style)** | `crates/rstn-core/src/onion.rs` | **Solo documentación/stub.** No hay implementación de Sphinx packets, mix nodes ni cover traffic. Marcado como investigación futura en `TIER3_STATUS.md`. | No |
+| **Verificación formal (Coq/Lean)** | — | **Solo documentación.** No hay código. Los circuit breakers (`circuit_breaker.rs`) son el sustituto práctico actual. | No |
+| **DAS completo** | `crates/rstn-core/src/das.rs` | Solo la base: Reed-Solomon erasure coding (`erasure.rs`) está implementado y testeado. El sampling aleatorio de light clients, NMT merkle trees y fraud proofs **no** están implementados. Investigación futura. | No |
+
+### 8.2 Lo que falta para mainnet — estado y plan
+
+| Ítem | Estado actual | Plan |
+|---|---|---|
+| **Auditoría criptográfica formal externa** | No iniciada. El stack PQ (Dilithium3 FIPS 204 real vía `fips204`, Kyber768, SPHINCS+/SLH-DSA, NoiseHandshake híbrido) está implementado y con tests unitarios, pero **sin revisión externa**. | Contratar firma registrada (Trail of Bits / NCC Group / Quarkslab). Entregable: reporte firmado del review del stack PQ. |
+| **Fuzzing extendido 24h+** | Targets listos (`consensus.rs`, `vm.rs`, `protocol.rs`). **No corridos** en CI extendido. | Configurar CI con `cargo +nightly fuzz run` por 24h+ por target. Entregable: corpus + crash log. |
+| **Fork de libp2p para transporte PQ wire-level** | Parcial. El sellado PQ de grupo (`pq_broadcast.rs`) cifra el **contenido** del gossipsub a nivel aplicación. El envelope de transporte sigue siendo Noise clásico (X25519). `pq_wire::PqStream` cubre streams directos peer-to-peer. | Fork de `libp2p-noise` para reemplazar X25519 por Kyber768+X25519 híbrido a nivel transporte. Plan en `LIBP2P_PQ_TRANSPORT_FORK.md` (~4 semanas). |
+| **App firmware Ledger on-device** | Spec completo en `LEDGER_BOLOS_FIRMWARE.md`. Trait `LedgerTransport` listo. La app on-device es un binario separado (`ledger-app/`) que se compila con `ledger-app-boilerplate` (SDK BOLOS), **no** con el workspace del nodo. | Compilar con SDK BOLOS, aprobar con Ledger HQ. Entregable: binario `.app` firmado. |
+
+### 8.3 Veredicto de compilación
+
+El workspace `rstn-node` es **code-complete** para los 8 crates principales (`rstn-crypto`, `rstn-core`, `rstn-storage`, `rstn-vm`, `rstn-rpc`, `rstn-bridge`, `rstn-p2p`, `rstn-node`). Los módulos de scaffolding (`rstn-sol-transpiler`, `rstn-ledger`, `fuzz/`, `ledger-app/`) **no bloquean** la compilación del nodo. Los ítems de mainnet (auditoría externa, fuzzing extendido, fork libp2p, firmware Ledger) son **entregables posteriores** a la compilación, no prerrequisitos de build.

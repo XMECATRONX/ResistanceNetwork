@@ -300,7 +300,7 @@ export const DexView = () => {
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <a
-            href="https://quantum-resistem-pro.vibepreview.com/stats"
+            href="/stats"
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-1 px-3 py-1.5 font-body text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
           >
             <ExternalLink className="h-3.5 w-3.5" />

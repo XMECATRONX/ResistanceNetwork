@@ -133,7 +133,7 @@ export const EconomicsSection = () => {
               <div className="flex items-center gap-2 mb-1">
                 <div
                   className="h-2 w-2 rounded-full shrink-0"
-                  style={{ background: "hsl(185 100% 55%)" }}
+                  style={{ background: "hsl(150 100% 55%)" }}
                 />
                 <span className="font-body text-xs font-medium text-foreground">
                   Bridge buyback burn
@@ -185,13 +185,13 @@ export const EconomicsSection = () => {
         <div
           className="mt-8 max-w-3xl mx-auto flex items-start gap-2 rounded-md border p-3 sm:p-4 text-left"
           style={{
-            borderColor: "hsl(185 100% 55% / 0.2)",
-            background: "hsl(185 100% 55% / 0.03)",
+            borderColor: "hsl(150 100% 55% / 0.2)",
+            background: "hsl(150 100% 55% / 0.03)",
           }}
         >
           <ShieldCheck
             className="mt-0.5 h-4 w-4 shrink-0"
-            style={{ color: "hsl(185 100% 55%)" }}
+            style={{ color: "hsl(150 100% 55%)" }}
             strokeWidth={1.5}
           />
           <div className="space-y-1">

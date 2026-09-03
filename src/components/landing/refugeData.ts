@@ -9,11 +9,11 @@ export interface ChainInfo {
 
 export const CHAINS: ChainInfo[] = [
   { id: "btc", label: "BTC", sig: "ECDSA", color: "hsl(150 70% 50%)" },
-  { id: "eth", label: "ETH", sig: "ECDSA", color: "hsl(185 100% 55%)" },
+  { id: "eth", label: "ETH", sig: "ECDSA", color: "hsl(150 100% 55%)" },
   { id: "sol", label: "SOL", sig: "Ed25519", color: "hsl(150 100% 45%)" },
   { id: "ada", label: "ADA", sig: "Ed25519", color: "hsl(0 70% 55%)" },
   { id: "dot", label: "DOT", sig: "Ed25519", color: "hsl(150 100% 45%)" },
-  { id: "near", label: "NEAR", sig: "Ed25519", color: "hsl(185 100% 55%)" },
+  { id: "near", label: "NEAR", sig: "Ed25519", color: "hsl(150 100% 55%)" },
 ];
 
 export const OTHER_VULNERABLE = [

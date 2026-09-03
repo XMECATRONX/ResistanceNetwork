@@ -23,7 +23,7 @@ const Lazy3D = ({ children }: { children: React.ReactNode }) => (
 
 /**
  * Landing page — Security & Defense in Depth section.
- * 12 attack vectors mitigated + Quantum Threat Timeline.
+ * 15 attack vectors mitigated + Quantum Threat Timeline.
  */
 export const SecuritySection = () => {
   const { t, i18n } = useTranslation();
@@ -119,7 +119,7 @@ export const SecuritySection = () => {
                   />
                 </div>
                 <span className="mt-1 block font-mono text-[9px] text-muted-foreground text-right">
-                  {mit.coverage}% cobertura
+                  {mit.coverage}% {t("sections.security.coverage")}
                 </span>
               </div>
             </motion.div>

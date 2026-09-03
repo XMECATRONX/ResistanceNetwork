@@ -89,7 +89,7 @@ export const NodesView = () => {
         </div>
       </Panel>
 
-      {/* Flujo de conexión — 6 pasos */}
+      {/* Connection flow — 6 steps */}
       <Panel
         title="Cómo conectarse a la red — Flujo completo"
         description="Desde cero hasta validar bloques. 6 pasos. Sin permisos, sin KYC, sin aprobaciones."
@@ -133,7 +133,7 @@ export const NodesView = () => {
         </div>
       </Panel>
 
-      {/* Onboarding no técnico */}
+      {/* Non-technical onboarding */}
       <Panel
         title="Onboarding sin código — Para usuarios no técnicos"
         description="4 pasos. Cero comandos. Cero terminal. Todo desde la extensión del navegador."
@@ -247,7 +247,7 @@ export const NodesView = () => {
                     row.severity === "Crítico"
                       ? "hsl(5 80% 55%)"
                       : row.severity === "Severo"
-                        ? "hsl(185 100% 55%)"
+                        ? "hsl(150 100% 55%)"
                         : row.severity === "Moderado"
                           ? "hsl(150 70% 50%)"
                           : "hsl(150 100% 45%)";
@@ -425,7 +425,7 @@ export const NodesView = () => {
                   ? "hsl(5 80% 55%)"
                   : alert.level === "Advertencia"
                     ? "hsl(150 70% 50%)"
-                    : "hsl(185 100% 55%)";
+                    : "hsl(150 100% 55%)";
               return (
                 <motion.div
                   key={i}
@@ -725,7 +725,7 @@ export const NodesView = () => {
           </motion.div>
         </div>
 
-        {/* Tópicos Gossipsub */}
+        {/* Gossipsub topics */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

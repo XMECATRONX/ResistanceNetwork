@@ -2,7 +2,7 @@
 
 > **Single source of truth for the project state.**
 > Consolidates all documentation, audit results, and next steps.
-> Frontend: COMPLETE · Backend: CODE-COMPLETE (awaiting compilation) · Estado: borrador interno — confidencial.
+> Frontend: COMPLETE · Backend: CODE-COMPLETE (awaiting compilation) · Status: internal draft — confidential.
 
 ---
 

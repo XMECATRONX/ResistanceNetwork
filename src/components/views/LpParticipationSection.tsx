@@ -39,7 +39,7 @@ export const LpParticipationSection = () => {
     {
       label: u.lps,
       pct: lp.split.liquidityProviders,
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       desc:
         lang === "es"
           ? "Menor APR · pasivo, sin slashing"

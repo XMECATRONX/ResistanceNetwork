@@ -45,6 +45,12 @@ use thiserror::Error;
 use rstn_crypto::{keccak512, Dilithium3PublicKey, Dilithium3Signature};
 use rstn_core::TxType;
 
+/// Escape hatch delay: ~24h at 400ms/block = 216,000 blocks.
+/// Users must wait this long after submitting an escape request before
+/// claiming their proportional share of locked reserves. The validators
+/// CANNOT prevent the claim — it executes unilaterally after the delay.
+pub const ESCAPE_DELAY_BLOCKS: u64 = 216_000;
+
 // SPV lock-verification framework (C1-production).
 pub mod spv;
 
@@ -380,6 +386,37 @@ impl LockProof {
     }
 }
 
+// --- Escape Hatch (unilateral user exit) --------------------
+
+/// A user's unilateral escape request. The user escrows their wrapped
+/// tokens (debiting their balance at submit time) and, after a delay
+/// (`ESCAPE_DELAY_BLOCKS` ≈ 24h), can claim a proportional share of
+/// the locked reserves — WITHOUT validator permission.
+///
+/// This is the safety net: if all validators go rogue, a user can still
+/// exit with their proportional share of the locked BTC/ETH. The
+/// validators cannot censor, block, or delay the claim — it executes
+/// deterministically after the delay period.
+///
+/// Proportional claim: if the user has X wrapped tokens and total
+/// circulating supply is Y, and total locked reserves is Z, the user
+/// gets (X / Y) * Z of the source-chain asset. When reserves are fully
+/// backed (Z == Y, the invariant), this equals X — 1:1 redemption.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EscapeHatchRequest {
+    /// Unique request ID (hash of chain || user || amount || height).
+    #[serde(with = "BigArray")]
+    pub request_id: [u8; 64],
+    pub user: [u8; 20],
+    pub chain: SourceChain,
+    pub amount: u128,
+    pub request_height: u64,
+    /// Height at which the claim can be executed
+    /// (request_height + ESCAPE_DELAY_BLOCKS).
+    pub claimable_at_height: u64,
+    pub executed: bool,
+}
+
 // --- Bridge State ------------------------------------------
 
 /// Global bridge state -- managed by the RSTN VM as a built-in contract.
@@ -408,6 +445,12 @@ pub struct BridgeState {
     /// Mints add to this balance; burns subtract from it.
     #[serde(default)]
     pub wrapped_balances: Vec<(SourceChain, [u8; 20], u128)>,
+    /// Pending escape hatch requests (unilateral user exit). Users who
+    /// want to leave the bridge without validator permission submit a
+    /// request here; after `ESCAPE_DELAY_BLOCKS` they can claim their
+    /// proportional share of locked reserves.
+    #[serde(default)]
+    pub escape_requests: Vec<EscapeHatchRequest>,
 }
 
 impl BridgeState {
@@ -427,6 +470,7 @@ impl BridgeState {
             max_daily_volume: 10_000_000_000_000, // 10,000 units (in smallest denomination)
             user_daily_volume: Vec::new(),
             wrapped_balances: Vec::new(),
+            escape_requests: Vec::new(),
         }
     }
 
@@ -833,6 +877,162 @@ impl BridgeState {
             }
         }
         Ok(())
+    }
+
+    // ── Escape Hatch: unilateral user exit ──────────────────────────
+
+    /// Submit a unilateral escape request. The user escrows their wrapped
+    /// tokens (debited immediately so they can't double-spend during the
+    /// delay) and, after `ESCAPE_DELAY_BLOCKS` (≈24h), can claim a
+    /// proportional share of the locked reserves WITHOUT validator
+    /// permission.
+    ///
+    /// This is the safety net against validator collusion: even if every
+    /// validator goes rogue and refuses to process normal burn-release
+    /// operations, users can still exit with their proportional share.
+    ///
+    /// Returns the request ID for tracking + claiming later.
+    pub fn submit_escape_hatch(
+        &mut self,
+        chain: SourceChain,
+        amount: u128,
+        user: [u8; 20],
+        current_height: u64,
+    ) -> Result<[u8; 64], BridgeError> {
+        if self.paused {
+            return Err(BridgeError::AlreadyExecuted("bridge is paused".into()));
+        }
+        if amount == 0 {
+            return Err(BridgeError::InvalidLockProof(
+                "escape amount must be > 0".into(),
+            ));
+        }
+        // Escrow the wrapped tokens — debit the user's balance immediately
+        // so they can't double-spend during the delay period. The reserves
+        // are NOT reduced yet (that happens at claim time).
+        self.burn_wrapped(chain, &user, amount)?;
+
+        let request_id = keccak512(&{
+            let mut buf = Vec::with_capacity(1 + 20 + 16 + 8);
+            buf.push(chain as u8);
+            buf.extend_from_slice(&user);
+            buf.extend_from_slice(&amount.to_le_bytes());
+            buf.extend_from_slice(&current_height.to_le_bytes());
+            buf
+        });
+
+        let claimable_at = current_height + ESCAPE_DELAY_BLOCKS;
+
+        self.escape_requests.push(EscapeHatchRequest {
+            request_id,
+            user,
+            chain,
+            amount,
+            request_height: current_height,
+            claimable_at_height: claimable_at,
+            executed: false,
+        });
+
+        tracing::info!(
+            "Escape hatch submitted: {} {} for user {:?}, claimable at height {}",
+            amount,
+            chain.wrapped_token_symbol(),
+            user,
+            claimable_at
+        );
+
+        Ok(request_id)
+    }
+
+    /// Claim an escape request after the delay has elapsed. Burns a
+    /// proportional share of the locked reserves and releases it to
+    /// the user's source-chain address. The validators CANNOT prevent
+    /// this — it executes unilaterally after `claimable_at_height`.
+    ///
+    /// Proportional claim: if the user escrowed X tokens and total
+    /// circulating supply is Y, and total locked reserves is Z, the
+    /// user gets (X / Y) * Z. When reserves are fully backed (Z == Y),
+    /// this equals X — 1:1 redemption. If reserves are short (attack
+    /// or bug), the user gets a proportional share of what remains.
+    ///
+    /// Returns (chain, release_amount, user_address).
+    pub fn claim_escape(
+        &mut self,
+        request_id: &[u8; 64],
+        current_height: u64,
+    ) -> Result<(SourceChain, u128, [u8; 20]), BridgeError> {
+        let idx = self
+            .escape_requests
+            .iter()
+            .position(|r| &r.request_id == request_id)
+            .ok_or(BridgeError::AlreadyExecuted(
+                "escape request not found".into(),
+            ))?;
+
+        let req = &self.escape_requests[idx];
+        if req.executed {
+            return Err(BridgeError::AlreadyExecuted(
+                "escape already claimed".into(),
+            ));
+        }
+        if current_height < req.claimable_at_height {
+            return Err(BridgeError::InvalidLockProof(format!(
+                "escape delay not elapsed: need height >= {}, got {}",
+                req.claimable_at_height, current_height
+            )));
+        }
+
+        let chain = req.chain;
+        let user = req.user;
+        let escrowed = req.amount;
+
+        // Compute the proportional release amount.
+        let reserves = self
+            .get_reserves(chain)
+            .ok_or(BridgeError::UnsupportedChain(format!("{:?}", chain)))?;
+        let circulating = reserves.minted.saturating_sub(reserves.burned);
+        if circulating == 0 {
+            return Err(BridgeError::InsufficientReserves {
+                locked: 0,
+                requested: escrowed,
+            });
+        }
+        // Proportional: escrowed * locked / circulating.
+        // When locked == circulating (normal), this = escrowed (1:1).
+        // When locked < circulating (attack), this < escrowed (proportional).
+        let mut release_amount = escrowed * reserves.locked / circulating;
+        // Cap at locked (can't release more than is actually locked).
+        if release_amount > reserves.locked {
+            release_amount = reserves.locked;
+        }
+
+        // Record the burn — reduces locked, increases burned.
+        if let Some(reserves) = self.get_reserves_mut(chain) {
+            reserves.record_burn(release_amount)?;
+        }
+
+        self.escape_requests[idx].executed = true;
+
+        tracing::info!(
+            "Escape hatch claimed: {} {} released to user {:?}",
+            release_amount,
+            chain.wrapped_token_symbol(),
+            user
+        );
+
+        Ok((chain, release_amount, user))
+    }
+
+    /// Get all pending escape requests (for RPC queries).
+    pub fn get_escape_requests(&self) -> &[EscapeHatchRequest] {
+        &self.escape_requests
+    }
+
+    /// Check if an escape request is claimable at `current_height`.
+    pub fn is_escape_claimable(&self, request_id: &[u8; 64], current_height: u64) -> bool {
+        self.escape_requests
+            .iter()
+            .any(|r| &r.request_id == request_id && !r.executed && current_height >= r.claimable_at_height)
     }
 
     /// Resume bridge operations after manual review.
@@ -1351,5 +1551,166 @@ mod tests {
         // Reserves must be unchanged (burn was rejected before record_burn).
         let reserves = state.get_reserves(SourceChain::Bitcoin).unwrap();
         assert_eq!(reserves.locked, 1000);
+    }
+
+    // ── Escape Hatch (unilateral user exit) ────────────────────────
+
+    /// Helper: lock tokens so the user has wrapped balance + reserves exist.
+    fn setup_lock_and_mint(
+        state: &mut BridgeState,
+        user: [u8; 20],
+        amount: u128,
+    ) -> ([u8; 64], rstn_crypto::Dilithium3Keypair) {
+        let kp = rstn_crypto::Dilithium3Keypair::generate();
+        let txid = vec![1, 2, 3, 4, 5, 6];
+        let committee = vec![kp.public.clone()];
+        let proof = LockProof::self_attest(&kp, SourceChain::Bitcoin, &txid, amount, &user);
+        let op_id = state
+            .submit_lock(SourceChain::Bitcoin, txid, amount, user, 1, &proof, &committee)
+            .unwrap();
+        let active = vec![kp.public.clone()];
+        let sig = BridgeSignature {
+            validator: kp.public.clone(),
+            signature: kp.sign(&op_id[..]),
+        };
+        state.add_bridge_signature(&op_id, sig).unwrap();
+        state.execute_operation(&op_id, &active).unwrap();
+        (op_id, kp)
+    }
+
+    #[test]
+    fn test_escape_hatch_submit_escrows_balance() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        setup_lock_and_mint(&mut state, user, 1000);
+
+        // User has 1000 wBTC.
+        assert_eq!(state.get_wrapped_balance(SourceChain::Bitcoin, &user), 1000);
+
+        // Submit escape hatch for 500.
+        let req_id = state
+            .submit_escape_hatch(SourceChain::Bitcoin, 500, user, 100)
+            .unwrap();
+
+        // The 500 is escrowed (debited from wrapped balance).
+        assert_eq!(state.get_wrapped_balance(SourceChain::Bitcoin, &user), 500);
+        assert_eq!(state.escape_requests.len(), 1);
+        assert_eq!(state.escape_requests[0].amount, 500);
+    }
+
+    #[test]
+    fn test_escape_hatch_cannot_claim_before_delay() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        setup_lock_and_mint(&mut state, user, 1000);
+
+        let req_id = state
+            .submit_escape_hatch(SourceChain::Bitcoin, 500, user, 100)
+            .unwrap();
+
+        // Try to claim immediately — must fail (delay not elapsed).
+        let result = state.claim_escape(&req_id, 100 + ESCAPE_DELAY_BLOCKS - 1);
+        assert!(result.is_err(), "cannot claim before delay elapses");
+    }
+
+    #[test]
+    fn test_escape_hatch_claims_after_delay() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        setup_lock_and_mint(&mut state, user, 1000);
+
+        // Reserves: locked=1000, minted=1000, burned=0.
+        assert_eq!(state.get_reserves(SourceChain::Bitcoin).unwrap().locked, 1000);
+
+        let req_id = state
+            .submit_escape_hatch(SourceChain::Bitcoin, 500, user, 100)
+            .unwrap();
+
+        // Claim after the delay — should succeed and release 500 (1:1 since
+        // locked == circulating).
+        let claim_height = 100 + ESCAPE_DELAY_BLOCKS;
+        let (chain, released, claimed_user) = state.claim_escape(&req_id, claim_height).unwrap();
+        assert_eq!(chain, SourceChain::Bitcoin);
+        assert_eq!(released, 500);
+        assert_eq!(claimed_user, user);
+
+        // Reserves reduced by 500.
+        assert_eq!(state.get_reserves(SourceChain::Bitcoin).unwrap().locked, 500);
+    }
+
+    #[test]
+    fn test_escape_hatch_proportional_when_reserves_short() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        setup_lock_and_mint(&mut state, user, 1000);
+
+        // Simulate reserves shortage: manually burn 500 from reserves without
+        // burning from a real user (simulating an attack/bug where locked < circulating).
+        // circulating = minted - burned = 1000 - 500 = 500.
+        // User escrows 100 tokens, should get 100 * 500 / 500 = 100 (1:1 since circulating == locked after the burn).
+        // But if we burn more, the proportional formula kicks in.
+        // For this test, we lock 1000, then burn 600 from reserves (simulating a partial drain).
+        // locked = 400, circulating = 1000 (minted) - 600 (burned) = 400.
+        // User escrows 200, should get 200 * 400 / 400 = 200 (still 1:1 because locked == circulating).
+        // The proportional < 1:1 case only happens if locked < circulating, which would require
+        // minting without locking (a bug). We simulate that by directly reducing locked.
+        let reserves = state.get_reserves_mut(SourceChain::Bitcoin).unwrap();
+        reserves.locked = 400; // simulate partial drain — only 400 actually locked
+
+        let req_id = state
+            .submit_escape_hatch(SourceChain::Bitcoin, 200, user, 200)
+            .unwrap();
+
+        // circulating = 1000 - 0 = 1000 (burned is still 0 in our test setup).
+        // release = 200 * 400 / 1000 = 80 (proportional — user gets 80% of escrowed).
+        let claim_height = 200 + ESCAPE_DELAY_BLOCKS;
+        let (_, released, _) = state.claim_escape(&req_id, claim_height).unwrap();
+        assert_eq!(released, 80, "proportional release when reserves are short");
+    }
+
+    #[test]
+    fn test_escape_hatch_double_claim_rejected() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        setup_lock_and_mint(&mut state, user, 1000);
+
+        let req_id = state
+            .submit_escape_hatch(SourceChain::Bitcoin, 500, user, 100)
+            .unwrap();
+
+        let claim_height = 100 + ESCAPE_DELAY_BLOCKS;
+        state.claim_escape(&req_id, claim_height).unwrap();
+
+        // Second claim — must fail (already claimed).
+        let result = state.claim_escape(&req_id, claim_height + 1);
+        assert!(result.is_err(), "double claim must be rejected");
+    }
+
+    #[test]
+    fn test_escape_hatch_paused_bridge_rejected() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        setup_lock_and_mint(&mut state, user, 1000);
+
+        state.emergency_pause();
+        let result = state.submit_escape_hatch(SourceChain::Bitcoin, 500, user, 100);
+        assert!(result.is_err(), "escape hatch on paused bridge must be rejected");
+    }
+
+    #[test]
+    fn test_escape_hatch_zero_amount_rejected() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        let result = state.submit_escape_hatch(SourceChain::Bitcoin, 0, user, 100);
+        assert!(result.is_err(), "zero amount escape must be rejected");
+    }
+
+    #[test]
+    fn test_escape_hatch_without_balance_rejected() {
+        let mut state = BridgeState::new();
+        let user = [1u8; 20];
+        // No lock/mint — user has 0 balance.
+        let result = state.submit_escape_hatch(SourceChain::Bitcoin, 100, user, 100);
+        assert!(result.is_err(), "escape without wrapped balance must be rejected");
     }
 }

@@ -33,6 +33,10 @@ const es = {
     roadmap: "Roadmap",
     build: "Construir",
     terminal: "Terminal",
+    ariaMain: "Navegación principal",
+    ariaSections: "Navegación de secciones",
+    ariaMobile: "Navegación móvil",
+    ariaFooter: "Navegación del pie de página",
   },
 
   // Landing — hero
@@ -48,6 +52,13 @@ const es = {
       finality: "Finalidad",
       pqCoverage: "Primitivos PQ",
       shards: "Shards",
+      validators: "Validadores",
+      live: "en vivo",
+      tpsTarget: "objetivo mainnet",
+      tpsLive: "medido",
+      finalityTestnet: "medido en testnet",
+      finalityLive: "medido",
+      validatorsLive: "activos en testnet",
     },
   },
 
@@ -76,8 +87,9 @@ const es = {
     },
     security: {
       label: "Seguridad en profundidad",
-      title: "12 vectores de ataque — mitigados",
-      desc: "Cada vector de ataque conocido tiene una mitigación diseñada en el protocolo. Defensa en profundidad: 4 completamente mitigados, 6 parciales, 2 en roadmap. No es seguridad por oscuridad — es defensa en profundidad verificable.",
+      title: "15 vectores de ataque — mitigados",
+      desc: "Cada vector de ataque conocido tiene una mitigación diseñada en el protocolo y verificada en Rust. 15 completamente mitigados — no es seguridad por oscuridad, es defensa en profundidad verificable.",
+      coverage: "cobertura",
     },
     migration: {
       label: "Quantum Migration Program",
@@ -346,25 +358,24 @@ const es = {
       stakingVotingVal: "Cuadrática",
       stakingThreshold: "Umbral",
       stakingThresholdVal: "51% IDs",
-      stakingMonetary: "Política Monetaria",
+      stakingMonetary: "Política Monetaria v3",
       stakingMonetaryBody:
-        "Hard cap de 1B RSTN. Cero minting. Burn del 50% del gas. Reserva con halving cada 4 años. Validadores ganan 30% fees + distribución de reserva.",
-      stakingBurn: "Burn",
-      stakingValidators: "Validadores",
-      stakingTreasury: "Reserva de Seguridad",
-      stakingMinting: "Minting",
-      monetaryTitle: "Política Monetaria — Hard Cap + Halving + Burn",
+        "Hard cap de 1B RSTN. Cero minting. EIP-1559 con piso de 1 gwei (burn nunca muere). Inflación dinámica con techo 2% (target 66% staked). Tip 100% al validador, burn 100% del base fee — streams separados, no compiten.",
+      stakingBurn: "Base Fee (Burn)",
+      stakingValidators: "Tip (Validador)",
+      stakingMinting: "Inflación Dinámica",
+      monetaryTitle:
+        "Política Monetaria v3 — EIP-1559 con Piso + Inflación Dinámica",
       monetaryDesc:
-        "Cero minting. Supply fijo de 1B RSTN. Burn del 50% del gas. Distribución de reserva con halving cada 4 años.",
-      monetaryFeeSplitTitle: "Split de Fees",
-      monetaryFeeBurn: "Burn (destruido)",
-      monetaryFeeValidators: "Validadores",
-      monetaryFeeTreasury: "Reserva de Seguridad",
+        "Cero minting. Supply fijo de 1B RSTN. Base fee EIP-1559 con piso de 1 gwei (burn sobrevive al escalar). Tip 100% al validador. Inflación dinámica con techo 2%, target 66% staked.",
+      monetaryFeeSplitTitle: "Modelo EIP-1559",
+      monetaryFeeBurn: "Base Fee → 100% Burn",
+      monetaryFeeValidators: "Tip → 100% Validador",
       monetaryFeeSplitBody:
-        "Cada transacción quema 50% del gas. Los validadores ganan 30% + distribución de reserva. Dos fuentes de ingreso sostienen la seguridad.",
-      monetaryHalvingTitle: "Halving de Reserva",
+        "Burn y tip son streams SEPARADOS. El base fee (con piso de 1 gwei) se quema 100%. El tip va 100% al validador. No compiten — corrige el error de Solana (50% burn mató validadores) y de Ethereum (burn murió sin piso).",
+      monetaryHalvingTitle: "Halving + Inflación Dinámica",
       monetaryHalvingBody:
-        "950M RSTN de reserva se distribuyen a stakers con halving cada 4 años. Converge a 0% en ~24 años (6 halvings). Posteriormente la red se vuelve deflacionaria: el burn del 50% del gas supera la emisión restante.",
+        "950M RSTN con halving cada 4 años + multiplicador dinámico: si staking <66%, hasta +2% extra (techo 2%, no 20% como Cosmos). Converge a 0% en ~24 años. Posteriormente la red es deflacionaria: el burn del base fee supera la distribución restante.",
       monetaryZeroMintTitle: "Cero Minting",
       monetaryZeroMintHardCap: "Hard Cap: 1,000,000,000 RSTN",
       monetaryZeroMintHardCapBody:
@@ -372,9 +383,9 @@ const es = {
       monetaryZeroMintMint: "Minting: 0%",
       monetaryZeroMintMintBody:
         "No se crean tokens nuevos. La reserva se distribuye, no se emite.",
-      monetaryZeroMintBurn: "Burn permanente",
+      monetaryZeroMintBurn: "Burn con piso de 1 gwei",
       monetaryZeroMintBurnBody:
-        "50% del gas destruido por tx. Cuando burn > distribución → supply decreciente.",
+        "Base fee EIP-1559 con piso de 1 gwei. El burn nunca llega a cero — sobrevive al escalamiento. Cuando burn > distribución → supply decreciente.",
       ossTitle: "Open-Source & Disclaimer",
       ossDesc:
         "Resistance Network es software libre. El protocolo existe como código abierto, auditable por cualquiera.",
@@ -454,12 +465,12 @@ const es = {
       finality: "Finalidad",
       transportTitle: "Capas de Transporte P2P",
       transportDesc:
-        "libp2p con cifrado post-cuántico híbrido. Cada conexión entre nodos está protegida.",
+        "Transporte base libp2p (Noise/X25519) con confidencialidad PQ por capas de aplicación: cifrado PQ wire-level para streams directos y broadcast gossipsub PQ bajo una group key de comité.",
       l4Layer: "L4 — Transporte",
       l4Desc: "Multiplexación de streams, 0-RTT, movilidad NAT.",
       l3Layer: "L3 — Seguridad",
       l3Desc:
-        "Handshake post-cuántico híbrido. Si rompen X25519, Kyber sostiene.",
+        "Handshake PQ híbrido (Kyber768+X25519+Dilithium3) para streams directos + group key de broadcast PQ. El Noise base es clásico; el reemplazo total requiere un fork libp2p.",
       l2Layer: "L2 — Gossip",
       l2Tech2: "Tópicos: blocks, txs, consensus, votes",
       l2Desc: "Propagación de bloques y transacciones con peer scoring.",

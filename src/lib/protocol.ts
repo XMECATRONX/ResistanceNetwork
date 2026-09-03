@@ -31,7 +31,7 @@ export const NETWORK_STATS = {
   maxSupply: "1,000,000,000",
 };
 
-// ─── Quantum Defense — 6 capas de defensa post-cuántica ──────────────────────
+// ─── Quantum Defense — 6 post-quantum defense layers ──────────────────────
 export const QUANTUM_DEFENSE = [
   {
     id: 1,
@@ -71,7 +71,7 @@ export const QUANTUM_DEFENSE = [
     scheme: "Stealth PQ (Dilithium3 + Kyber)",
     status: "implementado en diseño",
     coverage: 100,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     id: 4,
@@ -110,11 +110,11 @@ export const QUANTUM_DEFENSE = [
     scheme: "SPHINCS+ (hash-based, NIST FIPS 205)",
     status: "implementado en diseño",
     coverage: 100,
-    color: "hsl(340 75% 65%)",
+    color: "hsl(150 60% 40%)",
   },
 ] as const;
 
-// ─── PQ Migration Path — evolución criptográfica formal ──────────────────────
+// ─── PQ Migration Path — formal cryptographic evolution ──────────────────────
 export const PQ_MIGRATION_PATH = [
   {
     id: 1,
@@ -154,7 +154,7 @@ export const PQ_MIGRATION_PATH = [
     action:
       "Dilithium3 deja de aceptarse en nuevas transacciones. Las UTXOs no migradas tienen 6 meses adicionales para reclamar. Posteriormente, las claves no migradas se consideran abandonadas.",
     status: "condicional",
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
 ] as const;
 
@@ -221,7 +221,7 @@ export const SECURITY_MITIGATIONS = [
     riskBefore: "Alto",
     riskAfter: "Bajo",
     coverage: 85,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     id: 4,
@@ -249,7 +249,7 @@ export const SECURITY_MITIGATIONS = [
     riskBefore: "Alto",
     riskAfter: "Medio",
     coverage: 80,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     id: 6,
@@ -263,7 +263,7 @@ export const SECURITY_MITIGATIONS = [
     riskBefore: "Medio",
     riskAfter: "Bajo",
     coverage: 85,
-    color: "hsl(340 75% 65%)",
+    color: "hsl(150 60% 40%)",
   },
   {
     id: 7,
@@ -291,7 +291,7 @@ export const SECURITY_MITIGATIONS = [
     riskBefore: "Alto",
     riskAfter: "Muy bajo",
     coverage: 92,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     id: 9,
@@ -321,7 +321,7 @@ export const SECURITY_MITIGATIONS = [
     riskBefore: "Alto",
     riskAfter: "Medio",
     coverage: 80,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     id: 11,
@@ -352,6 +352,49 @@ export const SECURITY_MITIGATIONS = [
     riskAfter: "Muy bajo",
     coverage: 95,
     color: "hsl(0 75% 60%)",
+  },
+  {
+    id: 13,
+    vector: "Validador génesis con poder absoluto",
+    layer: "Consenso",
+    threat:
+      "El validador génesis es el único validador al lanzar. Tiene poder absoluto — puede censurar cada transacción.",
+    solution:
+      "Salida gradual del validador génesis (reducción automática de stake). genesis_effective_stake reduce el stake del génesis linealmente desde 100% hasta 10% sobre 10,000 épocas, comenzando en la época 1,000. El peso de gobernanza disminuye automáticamente — sin unstake manual.",
+    mechanism: "Genesis exit schedule — linear stake reduction over 10K epochs",
+    riskBefore: "Alto",
+    riskAfter: "Muy bajo",
+    coverage: 90,
+    color: "hsl(150 100% 45%)",
+  },
+  {
+    id: 14,
+    vector: "Multisig controlada por el equipo",
+    layer: "Gobernanza",
+    threat:
+      "Si el equipo controla la multisig del vault del bridge, puede coludir para liberar los BTC bloqueados y robar los fondos.",
+    solution:
+      "Multisig pública con firmantes independientes (no del equipo). MultisigConfig exige M-of-N firmas de un conjunto INDEPENDIENTE (auditors, validadores comunitarios, custodios). Cualquier firma de un miembro del EQUIPO es RECHAZADA. 3-of-5 para el vault del bridge, 2-of-3 para operaciones no críticas.",
+    mechanism: "Independent-signer multisig — team signers explicitly rejected",
+    riskBefore: "Crítico",
+    riskAfter: "Muy bajo",
+    coverage: 90,
+    color: "hsl(150 100% 45%)",
+  },
+  {
+    id: 15,
+    vector: "Sin escape hatch (fondos rehenes)",
+    layer: "Interoperabilidad",
+    threat:
+      "Si todos los validadores van rogue, los usuarios no pueden recuperar sus fondos — están rehenes del set de validadores.",
+    solution:
+      "Escape hatch unilateral con delay (24h). El usuario escrowa sus wrapped tokens y, después de 216,000 bloques (~24h), reclama una parte proporcional de las reservas bloqueadas — SIN permiso de validadores. Liberación proporcional: (escrowed / total_circulation) * locked_reserves.",
+    mechanism:
+      "Unilateral escape hatch — proportional reserve claim after 24h delay",
+    riskBefore: "Crítico",
+    riskAfter: "Muy bajo",
+    coverage: 95,
+    color: "hsl(150 100% 45%)",
   },
 ] as const;
 
@@ -474,7 +517,7 @@ export const ARCHITECTURE_LAYERS = [
     name: "Capa de Aplicación",
     description:
       "Smart contracts, wallets, dApps. Compatible con tooling EVM vía RSTN-VM.",
-    tech: ["RSTN-VM", "Solidity+", "Move VM", "WebAssembly"],
+    tech: ["RSTN-VM", "Solidity+", "Move-style resources", "WebAssembly"],
   },
   {
     layer: 6,
@@ -614,8 +657,8 @@ export const ROADMAP = [
 ] as const;
 
 // ─── Genesis Distribution — Proof of Participation ─────────────────────────
-// El 95% del supply se distribuye sin venta. Mecanismo: Proof of Participation.
-// Contribuyes trabajo real a la red → recibes RSTN. No es inversión, es recompensa.
+// 95% of supply is distributed without a sale. Mechanism: Proof of Participation.
+// You contribute real work to the network → you receive RSTN. It is not investment, it is reward.
 export const GENESIS_DISTRIBUTION = {
   mechanism: "Proof of Participation (PoP)",
   principle:
@@ -661,20 +704,20 @@ export const TOKENOMICS = [
   {
     allocation: "Airdrop Testnet (Semilla de arranque)",
     percentage: 5,
-    color: "hsl(340 75% 65%)",
+    color: "hsl(150 60% 40%)",
     description:
       "Único bucket pre-asignado: semilla de arranque entregada una sola vez a quienes corrieron nodos de testnet (trabajo verificado). Equivalente PoS a los primeros mineros de Satoshi. No transferible a fundadores. Sin ecosystem fund, sin treasury capturable: el 95% restante se gana por trabajo.",
   },
 ] as const;
 
-// ─── Team Bootstrap Role — modelo Satoshi (sin bucket reservado) ────────────
-// El equipo NO tiene asignación reservada en génesis. Opera el validador génesis
-// y gana RSTN desde el bucket de staking (95%) por ser el primero en hacer el
-// trabajo de bootstrap — igual que Satoshi minó los primeros BTC con PoW por ser
-// el primero en minar. Sin vesting, sin cliff, sin quema: no hay bucket que
-// administrar. El equipo cobra solo si hace el trabajo; si deja de validar,
-// deja de cobrar. Su share se diluye solo a medida que llegan nuevos stakers.
-// Compromiso público de no-venta a largo plazo = comportamiento sink de Satoshi.
+// ─── Team Bootstrap Role — Satoshi model (no reserved bucket) ──────────────
+// The team has NO reserved allocation in genesis. It operates the genesis
+// validator and earns RSTN from the staking bucket (95%) for being the first to
+// do the bootstrap work — just as Satoshi mined the first BTC with PoW for being
+// the first to mine. No vesting, no cliff, no burn: there is no bucket to
+// manage. The team only earns if it does the work; if it stops validating,
+// it stops earning. Its share dilutes only as new stakers arrive.
+// Public long-term no-sell commitment = Satoshi's sink behavior.
 export const TEAM_BOOTSTRAP_ROLE = {
   model: "Genesis Validator Operator (modelo Satoshi)",
   genesisReservation: "0% — el equipo NO tiene bucket reservado en génesis.",
@@ -842,7 +885,7 @@ export const NODE_DEPLOY = {
   },
 } as const;
 
-// ─── Network Discovery — cómo los nodos encuentran la red ──────────────────
+// ─── Network Discovery — how nodes find the network ───────────────────────
 export const NETWORK_DISCOVERY = {
   bootstrapMethod: "Seed nodes + DNS discovery + Kademlia DHT",
   seedNodes: [
@@ -1038,64 +1081,12 @@ export {
   ENERGY_COMPARISON,
 } from "./protocolMining";
 
-// ─── Política Monetaria v2 — Hard cap, cero minting, burn real ───────────────
-// Principios: (1) Hard cap estricto — supply finito desde génesis.
-// (2) Cero minting — reserva fija con halving geométrico que converge al 100%.
-// (3) Burn del 50% de fees — deflacionario sin matar incentivos de validación.
-// (4) Validadores ganan 30% fees + distribución de reserva (dos fuentes de ingreso).
-export const MONETARY_POLICY = {
-  maxSupply: "1,000,000,000 RSTN",
-  hardCap: "Fijo — jamás se supera. Todos los tokens existen desde génesis.",
-  minting:
-    "Cero. No se crean tokens nuevos. La reserva se distribuye, no se emite.",
-  feeSplit: {
-    burn: 50,
-    validators: 30,
-    securityReserve: 20,
-    description:
-      "Cada transacción: 50% del gas se quema (escasez), 30% al validador del bloque, 20% a reserva de seguridad on-chain (bug bounty + respuesta a incidentes). Esta reserva nace del USO de la red, no de una pre-asignación génesis — no hay treasury capturable en el bloque 0.",
-  },
-  reserveDistribution: {
-    total: "950,000,000 RSTN (95% del supply)",
-    model: "Halving geométrico cada 4 años — converge al 100% de la reserva",
-    schedule: [
-      { epoch: "Años 1-4", amount: "475M RSTN", percentage: 50 },
-      { epoch: "Años 5-8", amount: "237.5M RSTN", percentage: 25 },
-      { epoch: "Años 9-12", amount: "118.75M RSTN", percentage: 12.5 },
-      { epoch: "Años 13-16", amount: "59.37M RSTN", percentage: 6.25 },
-      { epoch: "Años 17-20", amount: "29.68M RSTN", percentage: 3.12 },
-      { epoch: "Años 21-24", amount: "14.84M RSTN", percentage: 1.56 },
-      {
-        epoch: "Año 24+",
-        amount: "Converge a 0 — 100% distribuido",
-        percentage: 0,
-      },
-    ],
-    principle:
-      "La reserva (95% del supply) se distribuye a stakers por participación en consenso. No es minting — son tokens pre-existentes asignados desde génesis. El equipo gana desde esta reserva operando el validador génesis (modelo Satoshi), sin bucket reservado. Cero ecosystem fund, cero treasury génesis: el 95% se gana por trabajo.",
-  },
-  burnMechanism: {
-    rate: "50% del gas de cada transacción",
-    permanent:
-      "Destruido permanentemente — enviado a null address verificable on-chain",
-    scarcityMechanism:
-      "Cuando burn > distribución de reserva → supply circulante decrece — mecanismo de escasez técnica. No garantiza apreciación del precio.",
-    trigger:
-      "Ocurre naturalmente cuando la red tiene uso real. No requiere congestión.",
-  },
-  validatorRevenue: {
-    sources: "Dos fuentes: 30% de fees + distribución de reserva",
-    sustainability:
-      "Cuando la reserva se agota (~24 años, 6 halvings), los fees sostienen a los validadores solos. La red se vuelve deflacionaria: el burn del 50% del gas supera la emisión restante → supply decrece, no crece.",
-    governance:
-      "Si los fees son insuficientes, la gobernanza on-chain puede ajustar el split",
-  },
-  comparison: {
-    rstn: "Hard cap 1B. Cero minting. Burn 50%. Mecanismo de escasez con uso real. Validadores con doble ingreso.",
-    principle:
-      "La economía de RSTN tiene un mecanismo de escasez técnica por diseño: supply fijo + burn continuo. No garantiza apreciación del precio — depende de oferta y demanda.",
-  },
-} as const;
+// ─── Monetary Policy v3 — EIP-1559 with floor + dynamic inflation ───────────
+// Extracted to src/lib/protocolMonetary.ts (superior model that fixes the 3
+// serious errors of Ethereum/Solana/Cosmos). Re-exported here for backwards-
+// compatible imports.
+import { MONETARY_POLICY } from "./protocolMonetary";
+export { MONETARY_POLICY } from "./protocolMonetary";
 
 // PARTICIPATION_STEPS and ENERGY_COMPARISON now live in protocolMining.ts
 // (re-exported above). Kept this comment as a marker.
@@ -1108,7 +1099,7 @@ export const EXPLORER_STATS = {
   avgBlockTime: "0.4s",
   tps: 18456,
   tpsTarget: 250000,
-  activeValidators: 4128, // target mainnet (génesis arranca con 500+)
+  activeValidators: 4128, // target mainnet (genesis starts with 500+)
   pendingTxs: 1284,
   avgFee: "0.0002 RSTN",
   totalTxCount: "1.84B",
@@ -1469,10 +1460,10 @@ export const MOCK_VALIDATORS = [
 export const TX_TYPE_COLORS: Record<string, string> = {
   Transfer: "hsl(150 100% 45%)",
   Stake: "hsl(150 100% 45%)",
-  Unstake: "hsl(340 75% 65%)",
-  Delegate: "hsl(185 100% 55%)",
+  Unstake: "hsl(150 60% 40%)",
+  Delegate: "hsl(150 100% 55%)",
   Contract: "hsl(150 70% 50%)",
-  Governance: "hsl(185 100% 55%)",
+  Governance: "hsl(150 100% 55%)",
 };
 
 // ─── Public Protocol Information ────────────────────────────────────────────
@@ -1593,7 +1584,7 @@ export const SDK_INFO = [
 
 const client = new RstnClient("https://rpc.rstn.network");
 
-// Enviar transacción con firma Dilithium3
+// Send transaction with Dilithium3 signature
 const tx = await client.sendTransaction({
   to: "rstn1qz9c1e7b3a...",
   amount: 1250,
@@ -1629,10 +1620,11 @@ async fn main() {
   {
     name: "RSTN-VM (Smart Contracts)",
     install: "rstn deploy --contract",
-    description: "EVM compatible + objetos Move. Dual VM sin fricción.",
+    description:
+      "EVM compatible + recursos lineales estilo Move. Sin fricción.",
     features: [
       "Solidity+ compatible",
-      "Move resources",
+      "Move-style resources",
       "Ejecución paralela",
       "Access lists",
     ],
@@ -1788,7 +1780,7 @@ export const CODE_EXAMPLES = [
     language: "TypeScript",
     code: `import { RstnClient, RstnWallet } from "@rstn/sdk";
 
-// 1. Generar wallet post-cuántica (Dilithium3)
+// 1. Generate post-quantum wallet (Dilithium3)
 const wallet = RstnWallet.generate();
 console.log("Address:", wallet.address); // rstn1...
 
@@ -1799,7 +1791,7 @@ const healthy = await client.health(); // true
 // 3. Consultar balance
 const balance = await client.getBalance(wallet.address);
 console.log("Balance:", balance.balance, "RSTN");
-console.log("Recompensas:", balance.rewards, "RSTN");`,
+console.log("Rewards:", balance.rewards, "RSTN");`,
   },
   {
     title: "Enviar una transacción firmada",
@@ -1809,9 +1801,9 @@ console.log("Recompensas:", balance.rewards, "RSTN");`,
 const client = new RstnClient("http://localhost:9944");
 const wallet = RstnWallet.generate();
 
-// 1. Construir transacción
+// 1. Build transaction
 const tx = TransactionBuilder.transfer(
-  "rstn1recipient...",  // dirección destino
+  "rstn1recipient...",  // destination address
   "1000000000",          // 1 RSTN (9 decimales)
   0                      // nonce
 );
@@ -1836,9 +1828,9 @@ const wallet = RstnWallet.generate();
 const validators = await client.getTopValidators(10);
 const best = validators[0]; // top por stake
 
-// 2. Construir delegación
+// 2. Build delegation
 const tx = TransactionBuilder.stake(
-  best.address,   // validador
+  best.address,   // validator
   "5000000000",   // 5,000 RSTN
   0               // nonce
 );
@@ -1848,7 +1840,7 @@ const signed = await wallet.signTx(tx);
 const hash = await client.sendTransaction(
   RstnWallet.toNodeFormat(signed)
 );
-console.log("Delegado:", hash);`,
+console.log("Delegated:", hash);`,
   },
   {
     title: "Reclamar del faucet de testnet",
@@ -1987,7 +1979,7 @@ export const STAKING_ACTIONS = [
     description: "Delega tu RSTN a un validador sin correr hardware",
     minAmount: "1 RSTN",
     icon: "Users",
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     action: "Unstake",
@@ -2108,7 +2100,7 @@ export const DEV_TRACKS = [
           "Operar un relayer IBC post-cuántico entre RSTN y otras chains.",
       },
     ],
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
 ] as const;
 
@@ -2262,7 +2254,8 @@ export const DEV_RESOURCES = [
   },
   {
     title: "Especificación de RSTN-VM",
-    description: "Opcodes, access lists, ejecución paralela y Move resources.",
+    description:
+      "Opcodes, access lists, ejecución paralela y recursos estilo Move.",
     type: "Docs",
     icon: "BookOpen",
   },
@@ -2409,7 +2402,7 @@ export const SDK_REFERENCE = [
   },
 ] as const;
 
-// ─── Wallet Integration — Cómo conectar la extensión RSTN ──────────────────
+// ─── Wallet Integration — How to connect the RSTN extension ────────────────
 export const WALLET_INTEGRATION = {
   title: "Integrar RSTN Wallet en tu dApp",
   description:
@@ -2418,25 +2411,25 @@ export const WALLET_INTEGRATION = {
     {
       step: 1,
       title: "Detectar la wallet",
-      code: `// Verificar si la extensión RSTN está instalada
+      code: `// Check if the RSTN extension is installed
 if (typeof window.rstn !== 'undefined') {
-  console.log('RSTN Wallet detectada');
+  console.log('RSTN Wallet detected');
   // window.rstn.isRstn === true
 }`,
     },
     {
       step: 2,
       title: "Conectar la wallet",
-      code: `// Pedir permiso al usuario para conectar
+      code: `// Ask the user for permission to connect
 const result = await window.rstn.connect();
-// Popup de la wallet pide aprobación
+// The wallet popup asks for approval
 // result: { address: "rstn1...", publicKey: "0x..." }
-console.log('Conectado:', result.address);`,
+console.log('Connected:', result.address);`,
     },
     {
       step: 3,
       title: "Firmar y enviar transacción",
-      code: `// La wallet firma internamente con Dilithium3
+      code: `// The wallet signs internally with Dilithium3
 const tx = {
   to: 'rstn1recipient...',
   value: '1000000000',  // 1 RSTN
@@ -2481,7 +2474,7 @@ console.log('Hash:', hash);`,
   ],
 } as const;
 
-// ─── Genesis Distribution Detail — Cómo se reparten 1B RSTN sin ICO ──────────
+// ─── Genesis Distribution Detail — How 1B RSTN is distributed without ICO ───
 export const GENESIS_DETAIL = {
   totalSupply: "1,000,000,000 RSTN",
   principle:
@@ -2592,8 +2585,8 @@ export const VALIDATOR_REGISTRATION = {
   },
 } as const;
 
-// ─── Early Validator Incentives (versión detallada para NodesView) ───────────
-// COLD_START_BOOTSTRAP.earlyValidatorIncentives tiene la versión resumida.
+// ─── Early Validator Incentives (detailed version for NodesView) ─────────────
+// COLD_START_BOOTSTRAP.earlyValidatorIncentives has the summarized version.
 export const EARLY_VALIDATOR_INCENTIVES = {
   principle:
     "Los primeros validadores asumen más riesgo. La red tiene menos seguridad económica al inicio. Se les compensa con un bonus de participación que decae con el tiempo.",
@@ -2974,7 +2967,7 @@ export const SECURITY_FRAMEWORK = {
       id: 3,
       domain: "Red P2P y Transporte",
       icon: "Server",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       attackSurface: "Gossip, descubrimiento de pares, propagación de bloques",
       threats: [
         {
@@ -3022,14 +3015,14 @@ export const SECURITY_FRAMEWORK = {
       icon: "Code",
       color: "hsl(150 70% 50%)",
       attackSurface:
-        "Ejecución de contratos, opcodes, access lists, Move resources",
+        "Ejecución de contratos, opcodes, access lists, recursos estilo Move",
       threats: [
         {
           threat:
             "Reentrancy — contrato llama a sí mismo antes de actualizar estado",
           severity: "Crítico",
           mitigation:
-            "RSTN-VM con checks-effects-interactions forzado. Move resources previenen reentrancy por diseño (resource linearizability).",
+            "RSTN-VM con checks-effects-interactions forzado. Recursos estilo Move (linearizability) previenen reentrancy por diseño.",
           status: "Mitigado",
         },
         {
@@ -3069,7 +3062,7 @@ export const SECURITY_FRAMEWORK = {
       id: 5,
       domain: "Economía y Staking",
       icon: "Coins",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       attackSurface: "Stake, slashing, delegación, recompensas, gobernanza",
       threats: [
         {
@@ -3115,7 +3108,7 @@ export const SECURITY_FRAMEWORK = {
       id: 6,
       domain: "Infraestructura y DevOps",
       icon: "HardDrive",
-      color: "hsl(340 75% 65%)",
+      color: "hsl(150 60% 40%)",
       attackSurface: "VPS, Docker, almacenamiento, monitoreo, updates",
       threats: [
         {
@@ -3208,7 +3201,7 @@ export const SECURITY_FRAMEWORK = {
       id: 8,
       domain: "Defensa contra IA Adversarial",
       icon: "BrainCircuit",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       attackSurface:
         "Bug discovery con IA, deepfakes, mapeo de red con ML, fuzzing adversarial",
       threats: [
@@ -3448,9 +3441,9 @@ export const SEED_NODE_GUIDE = {
     "Los seed nodes no reciben recompensas. Son un servicio público a la red. Operar un seed node es un acto de contribución, no un negocio.",
 } as const;
 
-// ─── Cold Start Bootstrap — Cómo nace la red desde cero ──────────────────────
-// El problema: BFT requiere 3f+1 nodos. Con 1 nodo, f=0 → tolera 0 fallos.
-// No se puede arrancar mainnet con un solo nodo. Esto documenta cómo se resuelve.
+// ─── Cold Start Bootstrap — How the network is born from zero ───────────────
+// The problem: BFT requires 3f+1 nodes. With 1 node, f=0 → tolerates 0 faults.
+// Mainnet cannot be started with a single node. This documents how it is resolved.
 export const COLD_START_BOOTSTRAP = {
   principle:
     "La red no nace con un nodo. Nace con una secuencia de fases que garantiza seguridad BFT real antes de abrirse al público.",
@@ -3488,7 +3481,7 @@ export const COLD_START_BOOTSTRAP = {
         "Se invita a colaboradores externos de confianza. Se prueban sharding cross-shard, gobernanza on-chain, y edge cases de consenso. Se mide TPS real.",
       canTransact: true,
       label: "Estable",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
     },
     {
       phase: 4,
@@ -3499,7 +3492,7 @@ export const COLD_START_BOOTSTRAP = {
         "Abierta a cualquier persona. Aquí empieza el snapshot de Proof of Participation. Los participantes acumulan RSTN por trabajo (reportar bugs, operar nodos estables, contribuir código).",
       canTransact: true,
       label: "Abierta",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
     },
     {
       phase: 5,
@@ -3807,7 +3800,7 @@ export const CROSS_CHAIN = {
         "BTC: ~60 min (6 confirmaciones). ETH: ~12 min (finality epoch).",
       risk: "Limitación honesta: las monedas abandonadas (claves perdidas) no pueden migrarse — solo el propietario puede iniciar la transferencia. Si el usuario no transfiere antes del deadline, la ventana expira y el capital queda bajo riesgo cuántico en la chain original. Solo chains con light client implementado son soportadas — no 'cualquier chain'.",
       status: "Diferenciador único del proyecto",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
     },
   ],
   securityDesign: [
@@ -3884,7 +3877,7 @@ export const CROSS_CHAIN = {
   },
 } as const;
 
-// ─── Cross-Shard Atomicity — Especificación formal ─────────────────────────
+// ─── Cross-Shard Atomicity — Formal specification ───────────────────────────
 export const CROSS_SHARD_SPEC = {
   model: "Lock-and-Commit de 2 fases (2PC) con rollback atómico",
   principle:
@@ -3926,7 +3919,7 @@ export const CROSS_SHARD_SPEC = {
     "Limitación honesta: el cross-shard atomicity garantiza que no hay débitos sin créditos, pero NO garantiza latencia baja para transacciones cross-shard. Una transacción que toca 2 shards tarda mínimo 2 bloques (lock + commit). Para DeFi de alta frecuencia, los devs deben diseñar contratos que operen dentro de un solo shard cuando sea posible.",
 } as const;
 
-// ─── Threshold ECDSA Throughput — Solución al bottleneck ───────────────────
+// ─── Threshold ECDSA Throughput — Solution to the bottleneck ───────────────
 export const THRESHOLD_THROUGHPUT = {
   problem:
     "Threshold ECDSA con 100 firmantes vía MPC produce ~1 firma por minuto. Si 1M usuarios quieren migrar BTC en 12 meses, eso es ~2,740/día. Un solo comité de 100 firmantes no soporta ese volumen.",
@@ -4033,8 +4026,8 @@ export const BRIDGE_ECONOMICS = {
         verifiable: true,
       },
       {
-        metric: "Treasury acumulado",
-        source: "Treasury address — saldo público",
+        metric: "Reserva de Seguridad acumulada",
+        source: "Security reserve address — saldo público",
         verifiable: true,
       },
     ],
@@ -4074,7 +4067,7 @@ export const BRIDGE_TRANSPARENCY = {
       label: "RSTN quemado (buyback)",
       value: "234,567",
       note: "60% de fees → buyback → burn",
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
     },
     {
       label: "Distribuido a stakers",
@@ -4116,7 +4109,7 @@ export const BRIDGE_TRANSPARENCY = {
   note: "Datos simulados para demostración. En mainnet, cada valor se lee del contrato del puente y del DEX en tiempo real. Cualquier nodo puede verificar.",
 } as const;
 
-// ─── Supply History — evolución del supply circulante ────────────────────────
+// ─── Supply History — circulating supply evolution ──────────────────────────
 export const SUPPLY_HISTORY = {
   maxSupply: 1_000_000_000,
   currentCirculating: 987_421_830,
@@ -4344,7 +4337,7 @@ export const REVENUE_SOURCES = [
     monthlyUsd: 32000,
     annualUsd: 384000,
     share: 5,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
 ] as const;
 
@@ -4368,7 +4361,7 @@ export const TOKENOMICS_EN = [
   {
     allocation: "Testnet Airdrop (Bootstrap seed)",
     percentage: 5,
-    color: "hsl(340 75% 65%)",
+    color: "hsl(150 60% 40%)",
     description:
       "The only pre-allocated bucket: a bootstrap seed delivered once to those who ran testnet nodes (verified work). The PoS equivalent of Satoshi's first miners. Not transferable to founders. No ecosystem fund, no capturable treasury: the remaining 95% is earned by work.",
   },
@@ -4439,59 +4432,8 @@ export const GENESIS_DETAIL_EN = {
   },
 } as const;
 
-export const MONETARY_POLICY_EN = {
-  maxSupply: "1,000,000,000 RSTN",
-  hardCap: "Fixed — never exceeded. All tokens exist from genesis.",
-  minting:
-    "Zero. No new tokens are created. The reserve is distributed, not minted.",
-  feeSplit: {
-    burn: 50,
-    validators: 30,
-    securityReserve: 20,
-    description:
-      "Each transaction: 50% of gas is burned (deflationary), 30% to the block validator, 20% to an on-chain security reserve (bug bounty + incident response). This reserve is born from network USAGE, not from a genesis pre-allocation — there is no capturable treasury in block 0.",
-  },
-  reserveDistribution: {
-    total: "950,000,000 RSTN (95% of supply)",
-    model: "Geometric halving every 4 years — converges to 100% of the reserve",
-    schedule: [
-      { epoch: "Years 1-4", amount: "475M RSTN", percentage: 50 },
-      { epoch: "Years 5-8", amount: "237.5M RSTN", percentage: 25 },
-      { epoch: "Years 9-12", amount: "118.75M RSTN", percentage: 12.5 },
-      { epoch: "Years 13-16", amount: "59.37M RSTN", percentage: 6.25 },
-      { epoch: "Years 17-20", amount: "29.68M RSTN", percentage: 3.12 },
-      { epoch: "Years 21-24", amount: "14.84M RSTN", percentage: 1.56 },
-      {
-        epoch: "Year 24+",
-        amount: "Converges to 0 — 100% distributed",
-        percentage: 0,
-      },
-    ],
-    principle:
-      "The reserve (95% of supply) is distributed to stakers for consensus participation. It is not minting — it is pre-existing tokens allocated from genesis. The team earns from this reserve by operating the genesis validator (Satoshi model), with no reserved bucket. Zero ecosystem fund, zero genesis treasury: 95% is earned by work.",
-  },
-  burnMechanism: {
-    rate: "50% of the gas of each transaction",
-    permanent:
-      "Permanently destroyed — sent to a null address verifiable on-chain",
-    scarcityMechanism:
-      "When burn > reserve distribution → circulating supply decreases — a technical scarcity mechanism. Does not guarantee price appreciation.",
-    trigger:
-      "Occurs naturally when the network has real usage. Does not require congestion.",
-  },
-  validatorRevenue: {
-    sources: "Two sources: 30% of fees + reserve distribution",
-    sustainability:
-      "When the reserve is depleted (~24 years, 6 halvings), fees sustain validators alone. The network becomes deflationary: the 50% gas burn exceeds the remaining emission → supply decreases, it does not grow.",
-    governance:
-      "If fees are insufficient, on-chain governance can adjust the split",
-  },
-  comparison: {
-    rstn: "Hard cap 1B. Zero minting. 50% burn. Scarcity mechanism with real usage. Validators with dual income.",
-    principle:
-      "RSTN' economy has a technical scarcity mechanism by design: fixed supply + continuous burn. Does not guarantee price appreciation — depends on supply and demand.",
-  },
-} as const;
+import { MONETARY_POLICY_EN } from "./protocolMonetary";
+export { MONETARY_POLICY_EN } from "./protocolMonetary";
 
 export const PROTOCOL_LICENSE_EN = {
   license: "Apache 2.0",

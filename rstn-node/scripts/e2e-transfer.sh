@@ -44,7 +44,7 @@ echo "  Sender: $SENDER"
 
 # --- 3. Generate a fresh recipient address --------------------------------
 # Use a fixed known test address (20 bytes). This is a throwaway dev address.
-RECIPIENT="rstn1deadbeef00000000000000000000deadbeef00"
+RECIPIENT="rstn1deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 echo ""
 echo "[3/6] Recipient: $RECIPIENT"
 

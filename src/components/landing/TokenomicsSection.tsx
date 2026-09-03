@@ -66,7 +66,7 @@ export const TokenomicsSection = () => {
     {
       label: u.lps,
       pct: lp.split.liquidityProviders,
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
       desc:
         lang === "es"
           ? "Menor APR · pasivo, sin slashing"
@@ -267,7 +267,7 @@ export const TokenomicsSection = () => {
                 {
                   label: t("sections.tokenomics.metrics.apr"),
                   value: lang === "en" ? "Variable" : "Variable",
-                  color: "hsl(185 100% 55%)",
+                  color: "hsl(150 100% 55%)",
                 },
                 {
                   label: t("sections.tokenomics.metrics.fairLaunch"),

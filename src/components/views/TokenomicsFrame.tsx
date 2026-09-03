@@ -24,7 +24,7 @@ export const TokenomicsFrame = () => {
       label: tk("statHardCap"),
       value: NETWORK_STATS.maxSupply,
       icon: TrendingUp,
-      color: "hsl(185 100% 55%)",
+      color: "hsl(150 100% 55%)",
     },
     {
       label: tk("statMinting"),

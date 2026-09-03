@@ -37,7 +37,7 @@ const severityColors = {
   info: {
     bg: "rgba(59,130,246,0.08)",
     border: "rgba(59,130,246,0.2)",
-    text: "hsl(185 100% 55%)",
+    text: "hsl(150 100% 55%)",
   },
 };
 

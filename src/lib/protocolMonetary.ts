@@ -1,15 +1,15 @@
-// RSTN — Monetary Policy v3 (EIP-1559 con piso + inflación dinámica)
-// Extraído de protocol.ts para mantener archivos enfocados.
+// RSTN — Monetary Policy v3 (EIP-1559 with floor + dynamic inflation)
+// Extracted from protocol.ts to keep files focused.
 
-// ─── Política Monetaria v3 — EIP-1559 con piso + inflación dinámica ──────────────
-// Modelo superior a Solana/Ethereum/Cosmos:
-// (1) Base fee EIP-1559 con PISO de 1 gwei — el burn nunca muere al escalar
-//     (error de Ethereum: base fee sin piso → burn colapsó 96.5% en 2026).
-// (2) Tip (priority fee) 100% al validador, stream SEPARADO del burn — el
-//     burn nunca compite con el ingreso del validador (error de Solana:
-//     50% burn mató a los validadores, revirtieron en SIMD-96 Feb 2025).
-// (3) Inflación dinámica con techo de 2%, target 66% staked — no 20% como
-//     Cosmos original (que diluyó a los holders).
+// ─── Monetary Policy v3 — EIP-1559 with floor + dynamic inflation ──────────────
+// Superior model to Solana/Ethereum/Cosmos:
+// (1) EIP-1559 base fee with a 1 gwei FLOOR — the burn never dies at scale
+//     (Ethereum's mistake: base fee without floor → burn collapsed 96.5% in 2026).
+// (2) Tip (priority fee) 100% to the validator, a SEPARATE stream from the burn — the
+//     burn never competes with validator income (Solana's mistake:
+//     50% burn starved validators, reverted in SIMD-96 Feb 2025).
+// (3) Dynamic inflation with a 2% cap, 66% staking target — not 20% like
+//     original Cosmos (which diluted holders).
 export const MONETARY_POLICY = {
   maxSupply: "1,000,000,000 RSTN",
   hardCap: "Fijo — jamás se supera. Todos los tokens existen desde génesis.",

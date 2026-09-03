@@ -1,116 +1,115 @@
-# RSTN — Equipo de Blockchain: Roles Integrados y Faltantes
+# RSTN — Blockchain Team: Integrated and Missing Roles
 
-> Fecha: 2026-09-01
-> Estado: **CONFIDENCIAL — USO INTERNO**
-
----
-
-## 1. Roles "integrados" (cubiertos por el desarrollo actual)
-
-El desarrollo hasta la fecha ha cubierto los siguientes roles mediante el
-trabajo del asistente de IA. Estos roles están **codificados** pero **no
-tienen un humano detrás**.
-
-| # | Rol | Lo que está hecho | Lo que falta |
-|---|-----|------------------|--------------|
-| 1 | **Arquitecto de protocolo** | Diseño de 7 capas, consenso BFT+DAG, sharding de 64 fragmentos, tokenómica Satoshi (0% team, 95% fair launch, 5% semilla), IBC, DAS, forced-inclusion, threshold mempool, zk-STARK foundation | — |
-| 2 | **Criptógrafo PQ (parcial)** | Stack Dilithium3 (FIPS 204 ML-DSA-65) + Kyber768 + SPHINCS+ + NoiseHandshake híbrido + forward security + quantum alarm + account abstraction. Tamaños wire FIPS canónicos (pk=1952, sk=4032, sig=3309) | **Auditoría criptográfica formal externa** — ninguna firma humana ha revisado el stack |
-| 3 | **Ingeniero Rust (nodo)** | rstn-node con 15 crates: core, crypto, p2p, bridge, VM, storage, rpc, node, ledger, sol-transpiler, vm, consensus, sharding, ibc, onion, zk_stark | Fork de libp2p para gossipsub PQ |
-| 4 | **Ingeniero Solidity (DEX/bridge)** | Contratos DEX (RstnDexPool, RstnDexFactory, WRSTN) + bridge lock-and-mint + ERC20Mock. 85/85 tests pasan | Auditoría externa de Solidity |
-| 5 | **Ingeniero frontend (React/TS)** | Landing page, DevPortal, terminal, 25+ views, wallet adapter, i18n ES/EN, design tokens, animaciones framer-motion | — |
-| 6 | **Ingeniero de seguridad (parcial)** | Auditoría interna completa (C1, C1-prod, C2, A1-A3, M1-M5), fuzz targets (protocol + VM + consensus), remediación, SPV real (double-SHA256 Bitcoin, Keccak-256 Ethereum) | **Auditor externo** (Trail of Bits, OpenZeppelin, Certik, Halborn), **penetration tester / red team** |
-| 7 | **Diseñador UX/UI** | Sistema de design tokens, componentes shadcn, paleta coherente (un solo verde), animaciones, responsive | — |
-| 8 | **Redactor técnico** | Whitepaper, whitepaper legal, SECURITY_AUDIT_FULL, READMEs, docs de deploy, whitepaper de tokenómica | — |
+> Date: 2026-09-01
+> Status: **CONFIDENTIAL — INTERNAL USE**
 
 ---
 
-## 2. Roles humanos REALES que faltan (no reemplazables por IA)
+## 1. "Integrated" roles (covered by current development)
 
-Estos son los profesionales que **deben contratarse/integrarse** antes de
-mainnet. La IA no puede firmar con reputación legal ni certificar criptografía.
+Development to date has covered the following roles through the work of the
+AI assistant. These roles are **coded** but **have no human behind them**.
 
-### P0 — Crítico para mainnet
-
-| # | Rol | Por qué es irremplazable | Referencia |
-|---|-----|--------------------------|-----------|
-| 1 | **Criptógrafo post-cuántico con PhD** | Auditar formalmente el stack PQ (Dilithium3, Kyber768, SPHINCS+, NoiseHandshake). Ningún inversor serio confía en criptografía no auditada por humanos. El stack usa `@noble/post-quantum` y `fips204` (librerías auditadas), pero la **composición** y los **parámetros** deben revisarse. | NIST PQC, Trail of Bits, Quarkslab |
-| 2 | **Auditor de contratos inteligentes (firma registrada)** | Auditoría externa del DEX (Solidity) y del bridge (Rust + Solidity). Los 85 tests pasan, pero los tests no son una auditoría. Wormhole perdió $320M por un bug que los tests no cubrieron. | Trail of Bits, OpenZeppelin, Certik, Halborn, Spearbit |
-| 3 | **Ingeniero DevOps/SRE blockchain** | Operar la testnet pública, monitorear nodos, infraestructura de seed nodes en 6 continentes. Los scripts de deploy existen pero **nadie está operando la red**. | — |
-| 4 | **Abogado cripto / regulatory counsel** | Clasificación del token (security vs utility) por jurisdicción, compliance AML/KYC del bridge, términos legales reales (no plantillas). | — |
-
-### P1 — Alto para adopción
-
-| # | Rol | Por qué | |
-|---|-----|---------|--|
-| 5 | **Community manager + dev relations** | Onboarding de validadores, docs para node operators, Discord/Telegram, programas de bug bounty. | — |
-| 6 | **Economista tokenómico** | Validación del modelo de emisión (1B RSTN, 95% fair launch), simulación de escasez (EIP-1559 + bridge burn), game theory del staking (32K mínimo, slashing 5%). | — |
-| 7 | **Penetration tester / red team** | Ataque real al nodo (RPC, p2p, gossipsub), al bridge (SPV, committee), al wallet (XSS, phishing), a la web (CORS, CSP) antes de mainnet. | — |
-| 8 | **Ingeniero de Ledger firmware (BOLOS)** | Escribir la app on-device (Rust + BOLOS SDK) que firma Dilithium3 en el secure element. El spec está en `LEDGER_BOLOS_FIRMWARE.md`. | Ledger's security team review |
-
-### P2 — Medio para escala
-
-| # | Rol | Por qué | |
-|---|-----|---------|--|
-| 9 | **Ingeniero de consenso / distributed systems** | Revisión del BFT+DAG, slashing, finalidad, view-changes. Especialistas en consenso son escasos. | — |
-| 10 | **Ingeniero de libp2p (fork)** | Implementar `PqNoiseConfig` en el fork de libp2p para gossipsub PQ wire-level. Plan en `GOSSIPSUB_PQ_BROADCAST.md` (~4 semanas). | — |
+| # | Role | What is done | What is missing |
+|---|------|-------------|-----------------|
+| 1 | **Protocol architect** | 7-layer design, BFT+DAG consensus, 64-shard sharding, Satoshi tokenomics (0% team, 95% fair launch, 5% seed), IBC, DAS, forced-inclusion, threshold mempool, zk-STARK foundation | — |
+| 2 | **PQ cryptographer (partial)** | Dilithium3 stack (FIPS 204 ML-DSA-65) + Kyber768 + SPHINCS+ + hybrid NoiseHandshake + forward security + quantum alarm + account abstraction. Canonical FIPS wire sizes (pk=1952, sk=4032, sig=3309) | **Formal external cryptographic audit** — no human firm has reviewed the stack |
+| 3 | **Rust engineer (node)** | rstn-node with 15 crates: core, crypto, p2p, bridge, VM, storage, rpc, node, ledger, sol-transpiler, vm, consensus, sharding, ibc, onion, zk_stark | libp2p fork for PQ gossipsub |
+| 4 | **Solidity engineer (DEX/bridge)** | DEX contracts (RstnDexPool, RstnDexFactory, WRSTN) + bridge lock-and-mint + ERC20Mock. 85/85 tests pass | External Solidity audit |
+| 5 | **Frontend engineer (React/TS)** | Landing page, DevPortal, terminal, 25+ views, wallet adapter, i18n ES/EN, design tokens, framer-motion animations | — |
+| 6 | **Security engineer (partial)** | Complete internal audit (C1, C1-prod, C2, A1-A3, M1-M5), fuzz targets (protocol + VM + consensus), remediation, real SPV (Bitcoin double-SHA256, Ethereum Keccak-256) | **External auditor** (Trail of Bits, OpenZeppelin, Certik, Halborn), **penetration tester / red team** |
+| 7 | **UX/UI designer** | Design token system, shadcn components, coherent palette (single green), animations, responsive | — |
+| 8 | **Technical writer** | Whitepaper, legal whitepaper, SECURITY_AUDIT_FULL, READMEs, deploy docs, tokenomics whitepaper | — |
 
 ---
 
-## 3. Presupuesto estimado (pre-mainnet, 6 meses)
+## 2. REAL human roles missing (not replaceable by AI)
 
-| Rol | FTE | Costo estimado (USD/año) | Total (6 meses) |
-|-----|-----|--------------------------|-----------------|
-| Criptógrafo PQ (PhD) | 0.5 | $180K | $90K |
-| Auditor Solidity (externo, una auditoría) | contrato | $80K–$150K | $100K |
-| Auditor Rust (externo, una auditoría) | contrato | $80K–$150K | $100K |
+These are the professionals who **must be hired/integrated** before mainnet.
+AI cannot sign with legal reputation or certify cryptography.
+
+### P0 — Critical for mainnet
+
+| # | Role | Why it is irreplaceable | Reference |
+|---|------|------------------------|-----------|
+| 1 | **Post-quantum cryptographer with PhD** | Formally audit the PQ stack (Dilithium3, Kyber768, SPHINCS+, NoiseHandshake). No serious investor trusts cryptography not audited by humans. The stack uses `@noble/post-quantum` and `fips204` (audited libraries), but the **composition** and **parameters** must be reviewed. | NIST PQC, Trail of Bits, Quarkslab |
+| 2 | **Smart contract auditor (registered firm)** | External audit of the DEX (Solidity) and the bridge (Rust + Solidity). The 85 tests pass, but tests are not an audit. Wormhole lost $320M to a bug the tests did not cover. | Trail of Bits, OpenZeppelin, Certik, Halborn, Spearbit |
+| 3 | **Blockchain DevOps/SRE engineer** | Operate the public testnet, monitor nodes, seed node infrastructure across 6 continents. The deploy scripts exist but **no one is operating the network**. | — |
+| 4 | **Crypto lawyer / regulatory counsel** | Token classification (security vs utility) by jurisdiction, bridge AML/KYC compliance, real legal terms (not templates). | — |
+
+### P1 — High for adoption
+
+| # | Role | Why | |
+|---|------|-----|--|
+| 5 | **Community manager + dev relations** | Validator onboarding, docs for node operators, Discord/Telegram, bug bounty programs. | — |
+| 6 | **Tokenomics economist** | Validation of the emission model (1B RSTN, 95% fair launch), scarcity simulation (EIP-1559 + bridge burn), staking game theory (32K minimum, 5% slashing). | — |
+| 7 | **Penetration tester / red team** | Real attack on the node (RPC, p2p, gossipsub), the bridge (SPV, committee), the wallet (XSS, phishing), the web (CORS, CSP) before mainnet. | — |
+| 8 | **Ledger firmware engineer (BOLOS)** | Write the on-device app (Rust + BOLOS SDK) that signs Dilithium3 on the secure element. The spec is in `LEDGER_BOLOS_FIRMWARE.md`. | Ledger's security team review |
+
+### P2 — Medium for scale
+
+| # | Role | Why | |
+|---|------|-----|--|
+| 9 | **Consensus / distributed systems engineer** | Review of BFT+DAG, slashing, finality, view-changes. Consensus specialists are scarce. | — |
+| 10 | **libp2p engineer (fork)** | Implement `PqNoiseConfig` in the libp2p fork for wire-level PQ gossipsub. Plan in `GOSSIPSUB_PQ_BROADCAST.md` (~4 weeks). | — |
+
+---
+
+## 3. Estimated budget (pre-mainnet, 6 months)
+
+| Role | FTE | Estimated cost (USD/year) | Total (6 months) |
+|-----|-----|---------------------------|-------------------|
+| PQ cryptographer (PhD) | 0.5 | $180K | $90K |
+| Solidity auditor (external, one audit) | contract | $80K–$150K | $100K |
+| Rust auditor (external, one audit) | contract | $80K–$150K | $100K |
 | DevOps/SRE | 1.0 | $140K | $70K |
-| Abogado cripto | 0.3 | $200K | $30K |
+| Crypto lawyer | 0.3 | $200K | $30K |
 | Community manager | 1.0 | $80K | $40K |
-| Economista tokenómico | 0.3 | $150K | $22K |
-| Pen tester (una auditoría) | contrato | $40K | $40K |
+| Tokenomics economist | 0.3 | $150K | $22K |
+| Pen tester (one audit) | contract | $40K | $40K |
 | Ledger firmware | 0.5 | $160K | $80K |
 | **Total** | | | **~$572K** |
 
 ---
 
-## 4. Veredicto honesto
+## 4. Honest verdict
 
-Tienen el **producto técnico** (código + docs + tests + fuzz + design specs)
-pero **cero equipo humano**. Para mainnet, el mínimo no negociable es:
+You have the **technical product** (code + docs + tests + fuzz + design specs)
+but **zero human team**. For mainnet, the non-negotiable minimum is:
 
-1. **1 criptógrafo PQ** (auditoría formal del stack)
-2. **1 auditor externo de Solidity** (DEX + bridge)
-3. **1 auditor externo de Rust** (nodo + consenso)
-4. **1 DevOps** (operar la testnet pública)
-5. **1 abogado cripto** (clasificación del token)
+1. **1 PQ cryptographer** (formal stack audit)
+2. **1 external Solidity auditor** (DEX + bridge)
+3. **1 external Rust auditor** (node + consensus)
+4. **1 DevOps** (operate the public testnet)
+5. **1 crypto lawyer** (token classification)
 
-Sin esos cinco, el proyecto **no es lanzable con credibilidad**, por más que
-el código compile, los 85 tests pasen, y el build esté limpio. La diferencia
-entre "código que funciona" y "protocolo en el que alguien deposita $1M" es
-exactamente estos cinco roles.
+Without those five, the project **is not credibly launchable**, no matter that
+the code compiles, the 85 tests pass, and the build is clean. The difference
+between "code that works" and "a protocol where someone deposits $1M" is
+exactly these five roles.
 
 ---
 
-## 5. Estado de mainnet — checklist
+## 5. Mainnet status — checklist
 
-| Ítem | Estado | Bloqueado por |
-|------|--------|---------------|
-| Código del nodo (Rust) | ✅ Compila + tests | — |
-| Contratos (Solidity) | ✅ 85/85 tests | — |
-| Frontend (React/TS) | ✅ Build limpio | — |
-| Wallet extension | ✅ Funcional | — |
-| Bridge SPV (BTC double-SHA256 + ETH Keccak) | ✅ Implementado + testeado | — |
-| Forced-inclusion pool | ✅ Cableado en propose_block + vote_prepare | — |
-| Threshold mempool (MEV) | ✅ Habilitado en main.rs | — |
-| DAS + erasure coding | ✅ Implementado | — |
-| Forward security (anti long-range) | ✅ Implementado | — |
-| Fuzz targets (protocol + VM + consensus) | ✅ Listos | Corridas 24h+ en CI |
-| Ledger firmware spec | ✅ Diseñado | App on-device (BOLOS) |
-| Gossipsub PQ plan | ✅ Diseñado | Fork de libp2p (~4 sem) |
-| **Auditoría criptográfica externa** | ⬜ Pendiente | Criptógrafo PQ |
-| **Auditoría Solidity externa** | ⬜ Pendiente | Auditor Solidity |
-| **Auditoría Rust externa** | ⬜ Pendiente | Auditor Rust |
-| **Testnet pública operada** | ⬜ Pendiente | DevOps/SRE |
-| **Clasificación legal del token** | ⬜ Pendiente | Abogado cripto |
-| **Firmware Ledger on-device** | ⬜ Pendiente | Ingeniero BOLOS |
-| **Fork de libp2p (gossipsub PQ)** | ⬜ Pendiente | Ingeniero libp2p |
+| Item | Status | Blocked by |
+|------|--------|------------|
+| Node code (Rust) | ✅ Compiles + tests | — |
+| Contracts (Solidity) | ✅ 85/85 tests | — |
+| Frontend (React/TS) | ✅ Clean build | — |
+| Wallet extension | ✅ Functional | — |
+| Bridge SPV (BTC double-SHA256 + ETH Keccak) | ✅ Implemented + tested | — |
+| Forced-inclusion pool | ✅ Wired in propose_block + vote_prepare | — |
+| Threshold mempool (MEV) | ✅ Enabled in main.rs | — |
+| DAS + erasure coding | ✅ Implemented | — |
+| Forward security (anti long-range) | ✅ Implemented | — |
+| Fuzz targets (protocol + VM + consensus) | ✅ Ready | 24h+ CI runs |
+| Ledger firmware spec | ✅ Designed | On-device app (BOLOS) |
+| Gossipsub PQ plan | ✅ Designed | libp2p fork (~4 weeks) |
+| **External cryptographic audit** | ⬜ Pending | PQ cryptographer |
+| **External Solidity audit** | ⬜ Pending | Solidity auditor |
+| **External Rust audit** | ⬜ Pending | Rust auditor |
+| **Operated public testnet** | ⬜ Pending | DevOps/SRE |
+| **Legal token classification** | ⬜ Pending | Crypto lawyer |
+| **Ledger on-device firmware** | ⬜ Pending | BOLOS engineer |
+| **libp2p fork (PQ gossipsub)** | ⬜ Pending | libp2p engineer |

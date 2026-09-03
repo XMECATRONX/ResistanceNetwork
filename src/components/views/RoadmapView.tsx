@@ -73,7 +73,7 @@ export const RoadmapView = () => {
             {
               level: "Crítico",
               desc: "Compromiso de claves, robo de fondos, romper consenso",
-              color: "hsl(185 100% 55%)",
+              color: "hsl(150 100% 55%)",
             },
             {
               level: "Alto",

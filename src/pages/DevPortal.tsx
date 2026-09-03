@@ -322,7 +322,7 @@ const DevPortal = () => {
                   suffix: "s",
                   decimals: 1,
                   icon: Activity,
-                  color: "hsl(185 100% 55%)",
+                  color: "hsl(150 100% 55%)",
                 },
                 {
                   label: "Costo por tx",
@@ -549,30 +549,30 @@ const DevPortal = () => {
               >
                 {`import { RstnClient, RstnWallet, TransactionBuilder } from '@rstn/sdk'
 
-// 1. Conectar al nodo
+// 1. Connect to the node
 const client = new RstnClient('http://localhost:9944')
 const healthy = await client.health()  // true
 
-// 2. Generar wallet post-cuántica (Dilithium3)
+// 2. Generate post-quantum wallet (Dilithium3)
 const wallet = RstnWallet.generate()
 console.log(wallet.address)  // rstn1...
 
-// 3. Consultar balance
+// 3. Query balance
 const balance = await client.getBalance(wallet.address)
 
-// 4. Construir y firmar transacción
+// 4. Build and sign transaction
 const tx = TransactionBuilder.transfer(
-  'rstn1recipient...',  // dirección destino
-  '1000000000',          // 1 RSTN (9 decimales)
+  'rstn1recipient...',  // destination address
+  '1000000000',          // 1 RSTN (9 decimals)
   0                      // nonce
 )
 const signed = await wallet.signTx(tx)
 
-// 5. Enviar a la red (firma Dilithium3 de 3309 bytes)
+// 5. Send to the network (Dilithium3 signature of 3309 bytes)
 const nodeTx = RstnWallet.toNodeFormat(signed)
 const txHash = await client.sendTransaction(nodeTx)
 
-// 6. Verificar en el explorer
+// 6. Verify in the explorer
 const blocks = await client.getLatestBlocks(5)`}
               </pre>
             </motion.div>

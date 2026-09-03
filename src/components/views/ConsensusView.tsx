@@ -30,7 +30,7 @@ const CONSENSUS_FEATURES = [
     description:
       "Un bloque queda finalizado e irreversible en 2 rondas de votación BFT. No esperas épocas ni minutos para confirmación final.",
     icon: Zap,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
     details: [
       "Ronda 1: Pre-commit (200ms)",
       "Ronda 2: Pre-vote (200ms)",
@@ -54,7 +54,7 @@ const CONSENSUS_FEATURES = [
     description:
       "Si una transacción es censurada en el bloque N, cualquier validador puede forzarla al bloque N+1. La censura es detectable y punible.",
     icon: Users,
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
     details: [
       "Mempool público verificable",
       "Window de 1 bloque",
@@ -88,7 +88,7 @@ export const ConsensusView = () => {
               step: "3",
               title: "Votación BFT",
               desc: "Ronda 1: pre-commit (200ms)",
-              color: "hsl(185 100% 55%)",
+              color: "hsl(150 100% 55%)",
             },
             {
               step: "4",

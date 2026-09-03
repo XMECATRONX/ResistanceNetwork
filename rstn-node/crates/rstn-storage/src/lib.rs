@@ -930,6 +930,8 @@ mod tests {
                 epoch: 0,
                 round: 0,
                 data_root: [0u8; 64],
+                vrf_output: [0u8; 64],
+                vrf_proof: Dilithium3Signature([0u8; 3309]),
             },
             transactions: vec![],
         }
@@ -980,6 +982,7 @@ mod tests {
             signature: Dilithium3Signature([0u8; 3309]),
             hybrid_signature: None,
             hybrid_pubkey: None,
+            gas_used: None,
         };
 
         db.add_to_mempool(&hash, &tx).unwrap();

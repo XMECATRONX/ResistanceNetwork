@@ -2,7 +2,7 @@
 
 **The first post-quantum Layer 1 blockchain. Built in Rust. Resistant to Shor.**
 
-RSTN is a sovereign Layer 1 blockchain designed with post-quantum cryptography from genesis. Every signature, every transport layer, every consensus message uses NIST-standardized PQ schemes (Dilithium3, Kyber768, SPHINCS+). When quantum computers break ECDSA and Ed25519, Resistance stands.
+RSTN is a sovereign Layer 1 blockchain designed with post-quantum cryptography from genesis. Every on-chain signature and every consensus vote uses NIST-standardized PQ schemes (Dilithium3, Kyber768, SPHINCS+). The P2P transport base is libp2p Noise (X25519, classical) with PQ confidentiality layered at the application level (PQ wire-level encryption for direct peer streams + PQ gossipsub broadcast under a committee group key); full Noise replacement requires a libp2p fork (upstream PR pending). When quantum computers break ECDSA and Ed25519, Resistance stands.
 
 ```
                     ┌─────────────────────────────────┐
@@ -29,7 +29,7 @@ RSTN is a sovereign Layer 1 blockchain designed with post-quantum cryptography f
 | **Cryptography** | Dilithium3 (FIPS 204) + Ed25519 hybrid · Keccak-512 · Kyber768 |
 | **Throughput** | 250,000 TPS target (64 shards × 2,048 TPS + DAG parallelism) |
 | **Sharding** | 64 dynamic shards · cross-shard lock-and-commit atomicity |
-| **VM** | EVM-compatible + Move resources · parallel execution |
+| **VM** | EVM-compatible + Move-style linear resources · PQ sig opcode |
 | **Token** | RSTN · 1B hard cap · zero minting · 50% fee burn (EIP-1559) |
 | **Bridge** | BTC (threshold ECDSA + SPV) · ETH (lock/burn) · Quantum Migration Program |
 | **License** | Apache 2.0 |
@@ -60,7 +60,7 @@ resistance/
 │   │   ├── rstn-crypto/        # Dilithium3, Kyber768, Keccak-512, PQ-VRF
 │   │   ├── rstn-p2p/           # libp2p gossipsub + Kademlia DHT
 │   │   ├── rstn-storage/       # sled-backed blocks, state, mempool
-│   │   ├── rstn-vm/            # EVM + Move resources + PQ sig opcode
+│   │   ├── rstn-vm/            # EVM + Move-style resources + PQ sig opcode
 │   │   ├── rstn-rpc/           # JSON-RPC 2.0 (19 methods)
 │   │   └── rstn-node/          # Binary entry point
 │   └── ROADMAP_BACKEND.md       # 7-phase path to mainnet

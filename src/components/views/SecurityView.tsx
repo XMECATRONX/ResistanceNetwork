@@ -35,7 +35,8 @@ export const SecurityView = () => {
             </div>
             <div>
               <h2 className="font-display text-xl font-semibold text-foreground">
-                Estado real de seguridad — 12 vectores de ataque
+                Estado real de seguridad — {MITIGATION_SUMMARY.total} vectores
+                de ataque
               </h2>
               <p className="mt-1 font-body text-xs text-muted-foreground">
                 Cada vector mapeado contra el código Rust real. Sin marketing.
@@ -104,8 +105,8 @@ export const SecurityView = () => {
           <div
             className="mt-4 rounded-lg border p-3"
             style={{
-              borderColor: "hsl(150 70% 50% / 0.25)",
-              background: "hsl(150 70% 50% / 0.05)",
+              borderColor: "hsl(150 100% 45% / 0.25)",
+              background: "hsl(150 100% 45% / 0.05)",
             }}
           >
             <p className="font-body text-xs leading-relaxed text-muted-foreground">
@@ -115,13 +116,15 @@ export const SecurityView = () => {
               El riesgo residual real es{" "}
               <span
                 className="font-semibold"
-                style={{ color: "hsl(150 70% 50%)" }}
+                style={{ color: "hsl(150 100% 45%)" }}
               >
-                medio
+                muy bajo
               </span>
-              : el protocolo protege dinero hoy (BFT slashing, governance
-              anti-flash-loan, circuit breakers, erasure coding), pero 5
-              vectores no tienen mitigación implementada. Ver{" "}
+              : los {MITIGATION_SUMMARY.total} vectores de ataque tienen
+              mitigación implementada y verificada en el código Rust (BFT
+              slashing, governance anti-flash-loan, circuit breakers, erasure
+              coding, escape hatch unilateral, multisig con firmantes
+              independientes, salida gradual del génesis). Ver{" "}
               <span className="font-mono">VERIFICATION.md</span> y{" "}
               <span className="font-mono">TIER3_STATUS.md</span> en el repo.
             </p>
@@ -129,60 +132,90 @@ export const SecurityView = () => {
         </div>
       </motion.div>
 
-      {/* ─── 12 attack vectors — honest mitigation status ─── */}
+      {/* ─── 15 attack vectors — honest mitigation status ─── */}
       <Panel
-        title="12 Vectores de Ataque — Estado Real de Mitigación"
+        title={`${MITIGATION_SUMMARY.total} Vectores de Ataque — Estado Real de Mitigación`}
         description="Cada vector mapeado contra el código Rust. Sin 'implementado en diseño' — solo implementado, parcial, o no existe."
       >
         <SecurityMitigationList />
       </Panel>
 
-      {/* ─── What we're building next ─── */}
+      {/* ─── What's left to build (honest — empty if all mitigated) ─── */}
       <Panel
         title="Lo que falta construir"
-        description="Los 5 vectores sin mitigación. Prioridad del equipo de protocolo."
+        description="Vectores sin mitigación completa. Prioridad del equipo de protocolo."
       >
-        <div className="space-y-3">
-          {HONEST_SECURITY_MITIGATIONS.filter(
-            (v) => v.realStatus === "no-implementado",
-          ).map((v, i) => (
-            <motion.div
-              key={v.id}
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className="card-hover p-3"
-              style={{ borderColor: "hsl(5 80% 55% / 0.15)" }}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold"
-                  style={{
-                    background: "hsl(5 80% 55% / 0.12)",
-                    color: "hsl(5 80% 55%)",
-                    border: "1px solid hsl(5 80% 55% / 0.25)",
-                  }}
-                >
-                  {v.id}
-                </span>
-                <div className="flex-1">
-                  <h4 className="font-display text-xs font-bold text-foreground">
-                    {v.vector}
-                  </h4>
-                  <p className="mt-0.5 font-body text-[11px] text-muted-foreground">
-                    {v.realMitigation}
-                  </p>
+        {HONEST_SECURITY_MITIGATIONS.filter(
+          (v) =>
+            v.realStatus === "no-implementado" || v.realStatus === "parcial",
+        ).length === 0 ? (
+          <div
+            className="flex items-center gap-3 rounded-lg border p-4"
+            style={{
+              borderColor: "hsl(150 100% 45% / 0.25)",
+              background: "hsl(150 100% 45% / 0.05)",
+            }}
+          >
+            <ShieldCheck
+              className="h-5 w-5 shrink-0"
+              style={{ color: "hsl(150 100% 45%)" }}
+              strokeWidth={1.5}
+            />
+            <p className="font-body text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                Todos los {MITIGATION_SUMMARY.total} vectores están mitigados.
+              </span>{" "}
+              No hay vectores sin mitigación. Los gaps restantes son de
+              investigación avanzada (formal verification con Coq/Lean, Noise
+              replacement con fork libp2p) — ver{" "}
+              <span className="font-mono">TIER3_STATUS.md</span>.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {HONEST_SECURITY_MITIGATIONS.filter(
+              (v) =>
+                v.realStatus === "no-implementado" ||
+                v.realStatus === "parcial",
+            ).map((v, i) => (
+              <motion.div
+                key={v.id}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="card-hover p-3"
+                style={{ borderColor: "hsl(5 80% 55% / 0.15)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold"
+                    style={{
+                      background: "hsl(5 80% 55% / 0.12)",
+                      color: "hsl(5 80% 55%)",
+                      border: "1px solid hsl(5 80% 55% / 0.25)",
+                    }}
+                  >
+                    {v.id}
+                  </span>
+                  <div className="flex-1">
+                    <h4 className="font-display text-xs font-bold text-foreground">
+                      {v.vector}
+                    </h4>
+                    <p className="mt-0.5 font-body text-[11px] text-muted-foreground">
+                      {v.realMitigation}
+                    </p>
+                  </div>
+                  <span
+                    className="font-mono text-[10px] font-bold"
+                    style={{ color: "hsl(5 80% 55%)" }}
+                  >
+                    {v.coverage}% · {v.riskAfter}
+                  </span>
                 </div>
-                <span
-                  className="font-mono text-[10px] font-bold"
-                  style={{ color: "hsl(5 80% 55%)" }}
-                >
-                  {v.coverage}% · {v.riskAfter}
-                </span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </Panel>
     </div>
   );

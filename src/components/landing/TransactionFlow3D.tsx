@@ -49,7 +49,7 @@ const STAGES = [
     icon: ShieldCheck,
     labelKey: "animations.flow.vote",
     subKey: "animations.flow.voteSub",
-    color: "hsl(185 100% 55%)",
+    color: "hsl(150 100% 55%)",
   },
   {
     id: "finality",
@@ -98,7 +98,7 @@ export const TransactionFlow3D = () => {
             className="h-full w-full"
             style={{
               background:
-                "linear-gradient(90deg, hsl(150 100% 45%), hsl(150 70% 50%), hsl(150 100% 45%), hsl(185 100% 55%), hsl(150 100% 50%))",
+                "linear-gradient(90deg, hsl(150 100% 45%), hsl(150 70% 50%), hsl(150 100% 45%), hsl(150 100% 55%), hsl(150 100% 50%))",
               boxShadow: "0 0 8px hsl(150 100% 45% / 0.5)",
             }}
           />
@@ -285,7 +285,7 @@ export const TransactionFlow3D = () => {
             </span>
             <span
               className="font-mono text-sm font-bold"
-              style={{ color: "hsl(185 100% 55%)" }}
+              style={{ color: "hsl(150 100% 55%)" }}
             >
               BFT 2/3+
             </span>

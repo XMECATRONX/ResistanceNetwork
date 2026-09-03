@@ -4,16 +4,16 @@ import { useTranslation } from "react-i18next";
 
 /**
  * Quantum Threat Timeline
- * Visualiza la amenaza cuántica progresando en el tiempo.
- * Las blockchains tradicionales (ECDSA/Ed25519) se "rompen" visualmente.
- * RSTN permanece intacto gracias a Dilithium3 (NIST FIPS 204).
+ * Visualizes the quantum threat progressing over time.
+ * Traditional blockchains (ECDSA/Ed25519) visually "break".
+ * RSTN remains intact thanks to Dilithium3 (NIST FIPS 204).
  *
- * NOTA IMPORTANTE: Los qubits listados son ESTIMACIONES de qubits LÓGICOS
- * (con corrección de errores), no físicos. IBM Condor (2023) tiene 1,121
- * qubits físicos pero solo ~10-50 lógicos. Romper RSA-2048 requiere
- * ~4,000 qubits lógicos (~millones de físicos). Las estimaciones de timeline
- * son del campo de investigación y varían ampliamente (2030-2050+).
- * NIST publicó FIPS 203/204/205 en agosto 2024.
+ * IMPORTANT NOTE: The qubits listed are estimates of LOGICAL qubits
+ * (with error correction), not physical. IBM Condor (2023) has 1,121
+ * physical qubits but only ~10-50 logical. Breaking RSA-2048 requires
+ * ~4,000 logical qubits (~millions of physical). Timeline estimates
+ * are from the research field and vary widely (2030-2050+).
+ * NIST published FIPS 203/204/205 in August 2024.
  */
 
 type Milestone = {
@@ -84,9 +84,9 @@ const STATUS_CONFIG = {
     label: "Vulnerable",
   },
   critical: {
-    color: "hsl(185 100% 55%)",
-    bg: "hsl(185 100% 55% / 0.08)",
-    border: "hsl(185 100% 55% / 0.25)",
+    color: "hsl(150 100% 55%)",
+    bg: "hsl(150 100% 55% / 0.08)",
+    border: "hsl(150 100% 55% / 0.25)",
     icon: AlertTriangle,
     label: "Crítico",
   },

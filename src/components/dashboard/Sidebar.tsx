@@ -45,6 +45,7 @@ export type ViewId =
   | "security"
   | "bridge"
   | "dex"
+  | "stablecoin"
   | "faucet"
   | "contracts"
   | "transparency"
@@ -78,6 +79,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "tokenomics", labelKey: "sidebar.nav.tokenomics", icon: Coins },
   { id: "bridge", labelKey: "sidebar.nav.bridge", icon: ArrowLeftRight },
   { id: "dex", labelKey: "sidebar.nav.dex", icon: Droplets },
+  { id: "stablecoin", labelKey: "sidebar.nav.stablecoin", icon: Coins },
   { id: "transparency", labelKey: "sidebar.nav.transparency", icon: Eye },
   { id: "network", labelKey: "sidebar.nav.network", icon: RadioTower },
   { id: "monitoring", labelKey: "sidebar.nav.monitoring", icon: Monitor },
@@ -238,9 +240,7 @@ const SidebarContent = ({
               aria-current={isActive ? "page" : undefined}
               title={collapsed ? t(item.labelKey) : undefined}
               className={`group relative flex w-full items-center rounded-md text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-                collapsed
-                  ? "h-10 w-10 justify-center"
-                  : "gap-3 px-3 py-2.5"
+                collapsed ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5"
               } ${isActive ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50"}`}
               style={isActive ? { boxShadow: "var(--shadow-xs)" } : undefined}
             >
@@ -254,7 +254,9 @@ const SidebarContent = ({
               <Icon
                 className="h-[18px] w-[18px] shrink-0 transition-all duration-200"
                 style={{
-                  color: isActive ? "var(--primary)" : "var(--sidebar-foreground)",
+                  color: isActive
+                    ? "var(--primary)"
+                    : "var(--sidebar-foreground)",
                 }}
                 strokeWidth={1.5}
               />

@@ -94,14 +94,14 @@ const Landing = () => {
             style={{
               width: `${scrollProgress}%`,
               background:
-                "linear-gradient(90deg, hsl(150 100% 45%), hsl(185 100% 55%))",
+                "linear-gradient(90deg, hsl(150 100% 45%), hsl(150 100% 55%))",
               boxShadow: "0 0 4px hsl(150 100% 45% / 0.3)",
             }}
           />
         </div>
         <nav
           className="glass sticky top-0 z-50 border-b border-border"
-          aria-label="Navegación principal"
+          aria-label={t("nav.ariaMain")}
         >
           <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-2.5 sm:px-6 sm:py-3">
             <Link
@@ -117,7 +117,7 @@ const Landing = () => {
 
             <nav
               className="hidden flex-1 items-center justify-center gap-1 xl:flex"
-              aria-label="Navegación de secciones"
+              aria-label={t("nav.ariaSections")}
             >
               {NAV_LINKS.map((link) => {
                 const isActive = activeSection === link.href.replace("#", "");
@@ -204,7 +204,7 @@ const Landing = () => {
                 className="xl:hidden overflow-hidden border-t border-border bg-background shadow-xl shadow-black/40"
                 id="mobile-nav"
                 role="navigation"
-                aria-label="Navegación móvil"
+                aria-label={t("nav.ariaMobile")}
               >
                 <div className="grid grid-cols-2 gap-1 px-4 py-4 sm:px-6 lg:grid-cols-3">
                   {NAV_LINKS.map((link) => (
@@ -311,10 +311,7 @@ const Landing = () => {
                 ? "RSTN es software experimental. Los tokens RSTN no tienen valor garantizado y pueden perder todo su valor. La participación en staking implica riesgo de slashing. Las transacciones en blockchain son irreversibles. No inviertas más de lo que puedes permitirte perder. Consulte asesoría legal sobre la clasificación del token en su jurisdicción."
                 : "RSTN is experimental software. RSTN tokens have no guaranteed value and may lose all value. Staking participation carries slashing risk. Blockchain transactions are irreversible. Do not invest more than you can afford to lose. Consult legal advice regarding token classification in your jurisdiction."}
             </p>
-            <nav
-              aria-label="Navegación del pie de página"
-              className="flex gap-6"
-            >
+            <nav aria-label={t("nav.ariaFooter")} className="flex gap-6">
               <Link
                 to="/terminal"
                 className="text-xs text-muted-foreground hover:text-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 rounded-sm"

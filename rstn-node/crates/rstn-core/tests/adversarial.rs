@@ -39,6 +39,8 @@ fn genesis_block(validator_pub: &rstn_crypto::Dilithium3PublicKey) -> Block {
             epoch: 0,
             round: 0,
             data_root: [0u8; 64],
+            vrf_output: [0u8; 64],
+            vrf_proof: Dilithium3Signature([0u8; 3309]),
         },
         transactions: vec![],
     }
@@ -79,6 +81,7 @@ fn make_tx(kp: &Dilithium3Keypair, nonce: u64, value: u128, to: [u8; 20]) -> Tra
         signature: Dilithium3Signature([0u8; 3309]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let msg = tx.hash();
     tx.signature = kp.sign(&msg);

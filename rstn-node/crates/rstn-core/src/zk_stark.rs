@@ -1,11 +1,11 @@
 //! G15 — zk-STARK foundation (hash-based, no trusted setup, PQ-resistant).
 //!
-//! ## Purpose — "Enf.5 Privacidad" + "Enf.8 Interoperabilidad"
+//! ## Purpose — "Enf.5 Privacy" + "Enf.8 Interoperability"
 //!
 //! The claims on the landing page:
-//! - "zk-STARKs nativos en el protocolo (no en L2). Hash-based, sin trusted
-//!   setup, post-cuántico."
-//! - "Los mensajes se verifican con zk-STARKs del estado de origen."
+//! - "Native zk-STARKs in the protocol (not in L2). Hash-based, no trusted
+//!   setup, post-quantum."
+//! - "Messages are verified with zk-STARKs of the source state."
 //!
 //! This module makes those claims *honest*. A zk-STARK (Zero-Knowledge
 //! Scalable Transparent ARguments of Knowledge) is a proof system that:

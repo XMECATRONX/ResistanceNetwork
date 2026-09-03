@@ -32,6 +32,8 @@ fn genesis_block(validator_pub: &rstn_crypto::Dilithium3PublicKey) -> Block {
             epoch: 0,
             round: 0,
             data_root: [0u8; 64],
+            vrf_output: [0u8; 64],
+            vrf_proof: Dilithium3Signature([0u8; 3309]),
         },
         transactions: vec![],
     }
@@ -76,6 +78,7 @@ fn make_tx(kp: &Dilithium3Keypair, nonce: u64, value: u128, to: [u8; 20]) -> Tra
         signature: Dilithium3Signature([0u8; 3309]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let msg = tx.hash();
     tx.signature = kp.sign(&msg);
@@ -428,6 +431,8 @@ fn test_block_wrong_parent_hash_rejected() {
             epoch: 0,
             round: 0,
             data_root: [0u8; 64],
+            vrf_output: [0u8; 64],
+            vrf_proof: Dilithium3Signature([0u8; 3309]),
         },
         transactions: vec![],
     };
@@ -547,6 +552,8 @@ fn test_block_hash_deterministic() {
         epoch: 0,
         round: 0,
         data_root: [0u8; 64],
+        vrf_output: [0u8; 64],
+        vrf_proof: Dilithium3Signature([0u8; 3309]),
     };
     let block1 = Block { header: header.clone(), transactions: vec![] };
     let block2 = Block { header, transactions: vec![] };
@@ -570,6 +577,8 @@ fn test_block_hash_differs_on_height() {
             epoch: 0,
             round: 0,
             data_root: [0u8; 64],
+            vrf_output: [0u8; 64],
+            vrf_proof: Dilithium3Signature([0u8; 3309]),
         },
         transactions: vec![],
     };
@@ -833,6 +842,7 @@ fn test_hybrid_tx_signature_verifies() {
         signature: rstn_crypto::Dilithium3Signature([0u8; 3309]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let msg = tx.hash();
     let hsig: HybridSignature = kp.sign(&msg);
@@ -863,6 +873,7 @@ fn test_hybrid_tx_rejects_tampered_ed25519() {
         signature: rstn_crypto::Dilithium3Signature([0u8; 3309]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let msg = tx.hash();
     let mut hsig: HybridSignature = kp.sign(&msg);
@@ -895,6 +906,7 @@ fn test_legacy_tx_dilithium_only_still_verifies() {
         signature: rstn_crypto::Dilithium3Signature([0u8; 3309]),
         hybrid_signature: None,
         hybrid_pubkey: None,
+        gas_used: None,
     };
     let msg = tx.hash();
     tx.signature = kp.sign(&msg);

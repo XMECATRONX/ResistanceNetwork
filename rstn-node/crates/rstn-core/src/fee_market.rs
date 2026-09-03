@@ -92,26 +92,44 @@ impl FeeMarket {
         self.last_block_gas = gas_used;
     }
 
-    /// Split a transaction's gas fee into base fee (burned) + tip (validator).
+    /// Split a transaction's gas fee into base fee (burned) + tip (validator),
+    /// charging ONLY for the gas actually consumed (`gas_used`), NOT the
+    /// reserved `gas_limit`.
     ///
-    /// The sender pays `gas_price * gas_limit` total. Of that:
-    /// - `base_fee * gas_limit` is BURNED (destroyed, deflationary)
-    /// - `(gas_price - base_fee) * gas_limit` goes to the VALIDATOR (tip)
+    /// This fixes the "no gas refund" gap (Ethereum refunds unused gas; before
+    /// this fix RSTN charged for the full reserved `gas_limit`, meaning a user
+    /// who reserved 100k gas but used 30k paid for 100k — a 70k penalty for
+    /// efficiency). Now the user pays only for what the VM consumed.
+    ///
+    /// - `base_fee * gas_used` is BURNED (destroyed, deflationary)
+    /// - `(gas_price - base_fee) * gas_used` goes to the VALIDATOR (tip)
     ///
     /// If the user's gas_price is below the base fee, the tip is zero and
-    /// only the base fee portion is burned (the rest is debited but not
-    /// given to the validator — effectively all burn).
+    /// only the base fee portion is burned.
     ///
     /// Returns (burn_amount, validator_tip).
-    pub fn split_fee(&self, gas_price: u128, gas_limit: u64) -> (u128, u128) {
-        let base_fee_total = self.base_fee.saturating_mul(gas_limit as u128);
-        let total_fee = gas_price.saturating_mul(gas_limit as u128);
+    pub fn split_fee(&self, gas_price: u128, gas_used: u64) -> (u128, u128) {
+        let base_fee_total = self.base_fee.saturating_mul(gas_used as u128);
+        let total_fee = gas_price.saturating_mul(gas_used as u128);
 
         // The burn is the base fee portion (capped at what the user actually pays)
         let burn = base_fee_total.min(total_fee);
         // The tip is what's left after the burn — 100% to the validator
         let tip = total_fee.saturating_sub(burn);
 
+        (burn, tip)
+    }
+
+    /// Legacy split that charges the full reserved `gas_limit`. Kept for
+    /// backward-compatibility with callers that pre-pay the full reserve
+    /// (e.g. balance checks that must hold the worst case). Production
+    /// finalization MUST use `split_fee` with `gas_used` so users are
+    /// refunded for unused gas.
+    pub fn split_fee_reserved(&self, gas_price: u128, gas_limit: u64) -> (u128, u128) {
+        let base_fee_total = self.base_fee.saturating_mul(gas_limit as u128);
+        let total_fee = gas_price.saturating_mul(gas_limit as u128);
+        let burn = base_fee_total.min(total_fee);
+        let tip = total_fee.saturating_sub(burn);
         (burn, tip)
     }
 

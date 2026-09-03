@@ -256,7 +256,7 @@ export const MiningView = () => {
                 label: "Energía mensual",
                 rstn: "$20-$50 (VPS)",
                 pow: "$200-$800 (electricidad)",
-                color: "hsl(185 100% 55%)",
+                color: "hsl(150 100% 55%)",
               },
               {
                 label: "Conocimiento técnico",
@@ -464,7 +464,7 @@ export const MiningView = () => {
         </div>
       </div>
 
-      {/* Cold Start Bootstrap — Cómo nace la red */}
+      {/* Cold Start Bootstrap — How the network is born */}
       <Panel
         title="Arranque en Frío — Cómo nace la red"
         description={COLD_START_BOOTSTRAP.principle}
