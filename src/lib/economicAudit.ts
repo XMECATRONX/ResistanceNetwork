@@ -55,15 +55,45 @@ export const ECONOMIC_AUDIT: EconomicAuditItem[] = [
       "bridge/lib.rs — no fee extracted (intentional: refugio cuántico = free bridge)",
   },
   {
-    item: "Oracle payment / staking",
-    status: "parcial",
+    item: "Oracle payment / staking (sources paid from treasury)",
+    status: "implementado",
     evidence:
-      "oracle.rs — median+TWAP+circuit breaker, but no payment to sources (future)",
+      "oracle.rs — ORACLE_PAYMENT_PER_SUBMISSION accrued per valid submission; claim_payment releases from treasury (community-governed, not operator); total_payment_owed for budgeting",
   },
   {
-    item: "State rent (storage pricing)",
-    status: "no-implementado",
-    evidence: "no per-state pricing (future research, prevents state bloat)",
+    item: "State rent (storage pricing, anti state-bloat)",
+    status: "implementado",
+    evidence:
+      "state_rent.rs — StateRentManager: SLOT_RENT_PER_BLOCK per slot, collect_rent per block, charge_rent_from_balance freezes accounts with insufficient balance, burned (deflationary)",
+  },
+  {
+    item: "Genesis validator gradual exit (anti-centralization)",
+    status: "implementado",
+    evidence:
+      "genesis_exit.rs — genesis_effective_stake: linear reduction from 100% to 10% floor over 10,000 epochs; tested monotonically decreasing",
+  },
+  {
+    item: "Bridge escape hatch (unilateral user exit, 24h delay)",
+    status: "implementado",
+    evidence:
+      "bridge/lib.rs — submit_escape_hatch escrows wrapped tokens; claim_escape releases proportional share after ESCAPE_DELAY_BLOCKS; validators CANNOT prevent",
+  },
+  {
+    item: "Multisig 3/5 independent (non-team) signers",
+    status: "implementado",
+    evidence:
+      "multisig.rs — MultisigConfig::three_of_five rejects team signers (TeamSignerRejected), enforces independent set, unique signers",
+  },
+  {
+    item: "Critical timelock on governance (48h)",
+    status: "implementado",
+    evidence: "lib.rs — CRITICAL_TIMELOCK_BLOCKS = 432,000 (~48h at 400ms/block)",
+  },
+  {
+    item: "IBC relayer market (permissionless, bond slashing)",
+    status: "implementado",
+    evidence:
+      "relayer_market.rs — Relayer registration with bond, fee bidding, bond slashing on invalid delivery; rstn_getRelayerMarket RPC",
   },
 ];
 
