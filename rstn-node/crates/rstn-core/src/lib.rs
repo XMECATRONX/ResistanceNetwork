@@ -29,6 +29,8 @@ pub mod move_resources; // Move-style linear resource types (formal verification
 pub mod geo_ip;        // IP-to-region geolocation (automatic validator region verification)
 pub mod genesis_exit;  // Gradual genesis validator stake reduction (anti-centralization)
 pub mod multisig;      // Public multisig with independent (non-team) signers
+pub mod state_rent;    // State rent — per-account storage pricing (anti state-bloat)
+pub mod reserve;       // Reserve distribution (Satoshi model, not minting) + burn accounting
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -869,11 +871,11 @@ impl ConsensusState {
             if let Some(entry) = self
                 .pending_rewards
                 .iter_mut()
-                .find(|(a, _)| a == &vaddr.0)
+                .find(|(a, _)| *a == vaddr)
             {
                 entry.1 = entry.1.saturating_add(delegator_share);
             } else {
-                self.pending_rewards.push((vaddr.0, delegator_share));
+                self.pending_rewards.push((vaddr, delegator_share));
             }
         }
 
