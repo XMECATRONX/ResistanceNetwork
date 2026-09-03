@@ -539,17 +539,29 @@ impl ConsensusEngine {
             transactions: txs,
         };
 
-        // EIP-1559 v3: compute the total gas used by this block and split
-        // each tx's fee into burn (base fee) + tip (validator). The burn is
-        // 100% destroyed; the tip goes 100% to the block's validator. These
-        // are SEPARATE streams — the burn does not reduce the validator's tip
-        // (fixes Solana's error). The base fee is floored at 1 gwei so the
+        // EIP-1559 v3: compute the total gas ACTUALLY CONSUMED by this block
+        // and split each tx's fee into burn (base fee) + tip (validator). The
+        // burn is 100% destroyed; the tip goes 100% to the block's validator.
+        // These are SEPARATE streams — the burn does not reduce the validator's
+        // tip (fixes Solana's error). The base fee is floored at 1 gwei so the
         // burn never dies at scale (fixes Ethereum's error).
-        let block_gas_used: u64 = block.transactions.iter().map(|tx| tx.gas_limit).sum();
+        //
+        // GAS REFUND (Gap 6 fix): the fee is charged on `gas_used` (the gas
+        // the VM actually consumed), NOT `gas_limit` (the gas the user
+        // reserved). A user who reserved 100k but used 30k now pays for 30k —
+        // the unused 70k is effectively refunded. This matches Ethereum's
+        // behavior and removes the penalty for efficiency. The VM tracks
+        // `gas_used` per tx; if unavailable we fall back to `gas_limit` (the
+        // pre-refund behavior) so the block still finalizes.
+        let mut block_gas_used: u64 = 0;
         let mut total_burned: u128 = 0;
         let mut total_tip: u128 = 0;
         for tx in &block.transactions {
-            let (burn, tip) = self.fee_market.split_fee(tx.gas_price, tx.gas_limit);
+            // Use the VM-reported gas_used if present, else fall back to the
+            // reserved gas_limit (backward compatibility).
+            let consumed = tx.gas_used.unwrap_or(tx.gas_limit);
+            block_gas_used = block_gas_used.saturating_add(consumed);
+            let (burn, tip) = self.fee_market.split_fee(tx.gas_price, consumed);
             total_burned = total_burned.saturating_add(burn);
             total_tip = total_tip.saturating_add(tip);
         }
@@ -561,6 +573,16 @@ impl ConsensusEngine {
         );
         // Adjust the base fee for the NEXT block based on this block's fullness.
         self.fee_market.update_after_block(block_gas_used);
+
+        // NOTE: reward distribution (tips + block reward) is handled by the
+        // runner, NOT here. The runner accumulates the total tip from
+        // `apply_block_transactions` and passes (tip + block_reward) to
+        // `distribute_rewards`, which applies the validator's commission and
+        // owes the rest to delegators (pending_rewards). Previously this
+        // function called distribute_rewards(total_tip) which created a
+        // delegator liability WITHOUT crediting the validator — double
+        // accounting. Now the runner is the single source of truth for
+        // reward distribution.
 
         // Leader signs the block
         let block_hash = block.hash();
