@@ -39,6 +39,12 @@ export const ECONOMIC_AUDIT: EconomicAuditItem[] = [
     evidence: "fee_market.rs — DynamicInflation::rate_multiplier",
   },
   {
+    item: "Reserve distribution (Satoshi model, NOT minting) — block reward debited from 950M pre-funded reserve, geometric halving every 4 years, hard cap 1B enforced",
+    status: "implementado",
+    evidence:
+      "reserve.rs — ReserveDistribution: 950M pre-funded, distribute_block_reward debits remaining + enforces cap, halving_rate_divisor (2^epoch), burned_total burn ledger; runner.rs — compute_block_reward_from_reserve replaces old hardcoded 0.1 RSTN minting in all 4 reward sites (dev catch-up, dev propose, multi-node propose, multi-node finalize)",
+  },
+  {
     item: "Stake dominance cap (20%, redistributes excess)",
     status: "implementado",
     evidence: "fee_market.rs — capped_stake, MAX_STAKE_DOMINANCE_BPS",
@@ -64,13 +70,13 @@ export const ECONOMIC_AUDIT: EconomicAuditItem[] = [
     item: "State rent (storage pricing, anti state-bloat)",
     status: "implementado",
     evidence:
-      "state_rent.rs — StateRentManager: SLOT_RENT_PER_BLOCK per slot, collect_rent per block, charge_rent_from_balance freezes accounts with insufficient balance, burned (deflationary)",
+      "state_rent.rs — StateRentManager: SLOT_RENT_PER_BLOCK per slot, collect_rent per block, charge_rent_from_balance freezes accounts with insufficient balance, burned (deflationary); runner.rs — sync_g15_state calls collect_rent per finalized block; rstn_getStateRent RPC",
   },
   {
     item: "Genesis validator gradual exit (anti-centralization)",
     status: "implementado",
     evidence:
-      "genesis_exit.rs — genesis_effective_stake: linear reduction from 100% to 10% floor over 10,000 epochs; tested monotonically decreasing",
+      "genesis_exit.rs — genesis_effective_stake: linear reduction from 100% to 10% floor over 10,000 epochs; runner.rs — compute_staking_ratio_bps applies genesis_effective_stake to validator 0 so its inflation influence shrinks automatically",
   },
   {
     item: "Bridge escape hatch (unilateral user exit, 24h delay)",
@@ -87,7 +93,8 @@ export const ECONOMIC_AUDIT: EconomicAuditItem[] = [
   {
     item: "Critical timelock on governance (48h)",
     status: "implementado",
-    evidence: "lib.rs — CRITICAL_TIMELOCK_BLOCKS = 432,000 (~48h at 400ms/block)",
+    evidence:
+      "lib.rs — CRITICAL_TIMELOCK_BLOCKS = 432,000 (~48h at 400ms/block)",
   },
   {
     item: "IBC relayer market (permissionless, bond slashing)",

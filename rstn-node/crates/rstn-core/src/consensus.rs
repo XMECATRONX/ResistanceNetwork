@@ -106,6 +106,13 @@ pub struct ConsensusEngine {
     /// 20% dilution). The runner feeds the current staking ratio and the
     /// multiplier adjusts the reserve distribution schedule.
     pub dynamic_inflation: crate::fee_market::DynamicInflation,
+    /// Reserve distribution (Satoshi model). Block rewards are DEBITED from
+    /// this pre-funded reserve (950M RSTN at genesis), NOT minted from thin
+    /// air. Geometric halving every 4 years. Hard cap 1B enforced. The
+    /// runner calls `distribute_block_reward()` instead of the old hardcoded
+    /// 0.1 RSTN constant. This makes the "zero minting / reserve distribution"
+    /// claim TRUE at runtime.
+    pub reserve: crate::reserve::ReserveDistribution,
 }
 
 impl ConsensusEngine {
@@ -128,6 +135,12 @@ impl ConsensusEngine {
             quantum_alarm: crate::quantum_alarm::QuantumAlarm::new(),
             fee_market: crate::fee_market::FeeMarket::new(),
             dynamic_inflation: crate::fee_market::DynamicInflation::new(),
+            reserve: crate::reserve::ReserveDistribution::new(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+            ),
         }
     }
 

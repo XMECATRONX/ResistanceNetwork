@@ -528,6 +528,43 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
         relayer_market: tokio::sync::RwLock::new(rstn_core::relayer_market::RelayerMarket::new(1_000)),
         // IP-to-region geolocation engine (curated prefix table, no external API).
         geo_ip: tokio::sync::RwLock::new(rstn_core::geo_ip::GeoIpLocator::new()),
+        // State rent manager (per-account storage pricing). The runner
+        // collects rent per block from accounts with stored state.
+        state_rent: tokio::sync::RwLock::new(rstn_core::state_rent::StateRentManager::new()),
+        // Onion-routing directory authority. Seeded with the validator set
+        // as relays so the mixnet has a real relay directory from genesis.
+        directory_authority: tokio::sync::RwLock::new({
+            let mut da = rstn_core::directory_authority::DirectoryAuthority::new(keypair_for_rpc.clone());
+            // Seed relays from the validator set (each validator is a relay).
+            for (i, v) in engine.state.validators.iter().enumerate() {
+                let relay_id = {
+                    let mut id = [0u8; 32];
+                    let pk_bytes = v.pubkey.0.to_vec();
+                    let n = pk_bytes.len().min(32);
+                    id[..n].copy_from_slice(&pk_bytes[..n]);
+                    id
+                };
+                let relay_key = {
+                    let mut k = [0u8; 32];
+                    let h = rstn_crypto::keccak512(&v.pubkey.0);
+                    k.copy_from_slice(&h[..32]);
+                    k
+                };
+                da.register(rstn_core::directory_authority::RelayEntry {
+                    relay_id,
+                    relay_key,
+                    region: v.region.clone(),
+                    uptime: 1.0,
+                });
+                let _ = i;
+            }
+            da
+        }),
+        // Cover-traffic scheduler: 5 dummy onions/sec mean rate (Poisson).
+        // The runner ticks it per block to emit cover traffic into the mixnet.
+        cover_traffic: tokio::sync::RwLock::new(rstn_core::onion::CoverTrafficScheduler::new(5.0, 42)),
+        // Governance proposals (on-chain, flash-loan defense + timelock).
+        governance_proposals: tokio::sync::RwLock::new(Vec::new()),
     });
 
     // C1 startup guard: refuse to start in production mode if the bridge
