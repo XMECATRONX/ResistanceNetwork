@@ -43,8 +43,18 @@ pub struct Proposal {
     /// Height at which the proposal passed (if it reached quorum).
     pub passed_height: Option<u64>,
     /// Whether the proposal has been executed. A passed proposal can only
-    /// execute after `execution_delay_blocks` -- the timelock.
+    /// execute after `timelock_blocks` -- the timelock.
     pub executed: bool,
+    /// Timelock in blocks before a passed proposal can execute.
+    /// Standard proposals: 1 epoch (EPOCH_LENGTH ≈ 7 min). Critical proposals:
+    /// 48h (CRITICAL_TIMELOCK_BLOCKS = 432,000 blocks at 400ms/block) — gives
+    /// the community time to react to hostile parameter changes, validator
+    /// set changes, or bridge upgrades before they take effect.
+    pub timelock_blocks: u64,
+    /// Whether this is a critical proposal (parameter changes, validator
+    /// set changes, bridge upgrades). Critical proposals get the 48h
+    /// timelock; standard proposals get the 1-epoch timelock.
+    pub is_critical: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -107,7 +117,25 @@ impl Proposal {
             vetoed: false,
             passed_height: None,
             executed: false,
+            timelock_blocks: EPOCH_LENGTH, // standard timelock (1 epoch ≈ 7 min)
+            is_critical: false,
         }
+    }
+
+    /// Create a CRITICAL proposal with a 48h timelock (432,000 blocks at
+    /// 400ms/block). Used for parameter changes, validator set changes,
+    /// and bridge upgrades — gives the community 48h to react (exit,
+    /// veto, or prepare) before the change takes effect.
+    pub fn new_critical(
+        id: u64,
+        proposer: [u8; 20],
+        creation_height: u64,
+        quorum_pct: u8,
+    ) -> Self {
+        let mut p = Self::new(id, proposer, creation_height, quorum_pct);
+        p.timelock_blocks = crate::CRITICAL_TIMELOCK_BLOCKS; // 48h
+        p.is_critical = true;
+        p
     }
 
     /// Cast a vote. `power_at_snapshot` is the voter's stake at the snapshot
@@ -201,13 +229,17 @@ impl Proposal {
 
     /// Can the proposal be executed at `current_height`?
     /// Requires: passed, not vetoed, not already executed, and the timelock
-    /// (1 epoch after passing) has elapsed.
+    /// (`timelock_blocks` after passing) has elapsed.
+    ///
+    /// Standard proposals: 1 epoch (EPOCH_LENGTH) — ~7 min timelock.
+    /// Critical proposals: 48h (CRITICAL_TIMELOCK_BLOCKS = 432,000 blocks) —
+    /// gives the community time to react before the change takes effect.
     pub fn can_execute(&self, current_height: u64) -> bool {
         if self.executed || self.vetoed {
             return false;
         }
         match self.passed_height {
-            Some(passed) => current_height >= passed + EPOCH_LENGTH,
+            Some(passed) => current_height >= passed + self.timelock_blocks,
             None => false,
         }
     }
@@ -303,5 +335,30 @@ mod tests {
             proposal.vote([1; 20], 100, VoteChoice::For),
             Err(GovernanceError::AlreadyVoted)
         );
+    }
+
+    #[test]
+    fn critical_timelock_48h_blocks_execution() {
+        let mut proposal = Proposal::new_critical(1, [0u8; 20], 10, 50);
+        proposal.vote([1; 20], 1_000_000, VoteChoice::For).unwrap();
+        proposal.mark_passed(15);
+        // 48h = 432,000 blocks at 400ms — can't execute before that
+        assert!(!proposal.can_execute(15 + crate::CRITICAL_TIMELOCK_BLOCKS - 1));
+        // Can execute after the full 48h timelock
+        assert!(proposal.can_execute(15 + crate::CRITICAL_TIMELOCK_BLOCKS));
+    }
+
+    #[test]
+    fn standard_timelock_is_1_epoch() {
+        let proposal = Proposal::new(1, [0u8; 20], 10, 50);
+        assert_eq!(proposal.timelock_blocks, EPOCH_LENGTH);
+        assert!(!proposal.is_critical);
+    }
+
+    #[test]
+    fn critical_proposal_has_48h_timelock() {
+        let proposal = Proposal::new_critical(1, [0u8; 20], 10, 50);
+        assert_eq!(proposal.timelock_blocks, crate::CRITICAL_TIMELOCK_BLOCKS);
+        assert!(proposal.is_critical);
     }
 }

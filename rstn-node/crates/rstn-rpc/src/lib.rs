@@ -180,6 +180,11 @@ pub struct RpcState {
     /// Governance proposals (on-chain, with flash-loan defense + timelock).
     /// The runner tracks proposals; RPC exposes them via rstn_getProposals.
     pub governance_proposals: tokio::sync::RwLock<Vec<rstn_core::governance::Proposal>>,
+    /// rUSD over-collateralized stablecoin manager (DAI model). The runner
+    /// writes the consensus-aggregated median price to this manager every
+    /// block (when the price moves materially or approaches staleness). RPC
+    /// exposes the vault state via rstn_getStablecoinState.
+    pub stablecoin: tokio::sync::RwLock<rstn_core::stablecoin::StablecoinManager>,
 }
 
 /// RPC rate limit: max requests per IP per second.
@@ -434,6 +439,10 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         // -- Cover Traffic Status --------------------------
         // Returns the cover-traffic scheduler state (rate, emitted count).
         "rstn_getCoverTraffic" => get_cover_traffic(state).await,
+
+        // -- rUSD Stablecoin (over-collateralized, DAI model) -------------
+        // Returns the vault state: config, oracle price, supply, staleness.
+        "rstn_getStablecoinState" => get_stablecoin_state(state).await,
 
         // -- Unknown ---------------------------------------
         _ => Err(RpcError::MethodNotFound(req.method.clone())),
@@ -3162,10 +3171,40 @@ async fn get_relay_directory(state: &RpcState) -> Result<Value, RpcError> {
 
 /// Cover traffic: returns the scheduler state (rate, elapsed, next emit).
 async fn get_cover_traffic(state: &RpcState) -> Result<Value, RpcError> {
-    let ct = state.cover_traffic.read().await;
+    let _ct = state.cover_traffic.read().await;
     Ok(serde_json::json!({
         "ratePerSec": 5.0,
         "active": true,
         "note": "Poisson-distributed dummy onions emitted per block interval",
+    }))
+}
+
+/// rUSD stablecoin state: returns the vault config, the consensus-aggregated
+/// oracle price (median + TWAP), the last price written on-chain, total
+/// supply/collateral, and whether the on-chain price is stale. This is the
+/// live RPC the frontend reads to render the stablecoin dashboard — no longer
+/// hardcoded values.
+async fn get_stablecoin_state(state: &RpcState) -> Result<Value, RpcError> {
+    let mgr = state.stablecoin.read().await;
+    let oracle = state.oracle.read().await;
+    let consensus_height = state.consensus.read().await.last_finalized_height;
+    Ok(serde_json::json!({
+        "minCollateralRatioBps": mgr.config.min_collateral_ratio_bps,
+        "liquidationRatioBps": mgr.config.liquidation_ratio_bps,
+        "liquidationPenaltyBps": mgr.config.liquidation_penalty_bps,
+        "stabilityFeePerSec": mgr.config.stability_fee_per_sec.to_string(),
+        "maxStaleBlocks": mgr.config.max_stale_blocks,
+        "medianPrice": oracle.current_price().to_string(),
+        "twap": oracle.twap().to_string(),
+        "trustedSources": oracle.trusted_source_count(),
+        "totalSources": oracle.sources.len(),
+        "lastWrittenPrice": mgr.last_written_price.to_string(),
+        "lastWriteHeight": mgr.last_write_height,
+        "currentHeight": consensus_height,
+        "priceStale": mgr.is_price_stale(consensus_height),
+        "totalSupply": mgr.total_supply.to_string(),
+        "totalCollateral": mgr.total_collateral.to_string(),
+        "deployed": false,
+        "note": "EVM contracts (RSTNUSD, RstnVault, RstnOracleAdapter) are deployable; the node feeds the consensus median price to the on-chain adapter every block.",
     }))
 }
