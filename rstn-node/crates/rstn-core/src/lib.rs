@@ -23,6 +23,10 @@ pub mod nmt;           // G3-complete -- Namespaced Merkle Trees for application
 pub mod geo_cap;       // G11 -- Geographic validator cap (on-chain region monitoring)
 pub mod directory_authority; // G6-complete -- Directory authority for the onion mixnet
 pub mod fee_market;    // EIP-1559 fee market (base fee burned + tip to validator + dynamic inflation)
+pub mod relayer_market; // G7-complete -- Permissionless relayer market for IBC
+pub mod oracle;        // Oracle multi-source aggregation (median + TWAP)
+pub mod move_resources; // Move-style linear resource types (formal verification)
+pub mod geo_ip;        // IP-to-region geolocation (automatic validator region verification)
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;

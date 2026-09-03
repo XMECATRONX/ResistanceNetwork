@@ -583,6 +583,15 @@ async fn sync_g15_state(
         let mut cb = state.circuit_breakers.write().await;
         *cb = engine.circuit_breaker.clone();
     }
+    // 2b. Mirror the forward-security ledger so RPC can query authorized
+    //     keys per epoch. A node syncing from genesis checks every block
+    //     signer against this ledger (long-range attack protection).
+    {
+        let mut fs = state.forward_security.write().await;
+        if let Some(ledger) = &engine.forward_security {
+            *fs = ledger.clone();
+        }
+    }
     // 3. Generate a zk-STARK proof over the block's tx_root. The AIR encodes
     //    "the Merkle root of this block's transactions is X" — a light client
     //    verifies the proof without re-executing every transaction.

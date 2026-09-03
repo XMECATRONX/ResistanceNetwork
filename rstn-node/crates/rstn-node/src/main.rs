@@ -513,6 +513,21 @@ async fn run_node(cli: Cli) -> anyhow::Result<()> {
         // query active trips. The runner syncs the engine's breaker into this
         // slot after every block.
         circuit_breakers: tokio::sync::RwLock::new(rstn_core::circuit_breaker::CircuitBreaker::new()),
+        // Forward-security ledger (long-range attack protection). Seeded with
+        // the genesis validator set so epoch-0 keys are authorized. The runner
+        // syncs rotations after every finalize so RPC reads are consistent.
+        forward_security: tokio::sync::RwLock::new({
+            let mut ledger = rstn_core::forward_security::ForwardSecurityLedger::new();
+            ledger.seed_genesis(&engine.state.validators);
+            ledger
+        }),
+        // Multi-source oracle aggregator (median + TWAP). The runner feeds
+        // aggregated prices into the circuit breaker for deviation detection.
+        oracle: tokio::sync::RwLock::new(rstn_core::oracle::MultiSourceOracle::new(100)),
+        // Permissionless relayer market for IBC. Min bond 1,000 micro-RSTN.
+        relayer_market: tokio::sync::RwLock::new(rstn_core::relayer_market::RelayerMarket::new(1_000)),
+        // IP-to-region geolocation engine (curated prefix table, no external API).
+        geo_ip: tokio::sync::RwLock::new(rstn_core::geo_ip::GeoIpLocator::new()),
     });
 
     // C1 startup guard: refuse to start in production mode if the bridge

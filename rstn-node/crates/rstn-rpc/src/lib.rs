@@ -147,6 +147,24 @@ pub struct RpcState {
     /// circuit_breaker so RPC can query active trips (drain / oracle /
     /// global). The runner syncs this after every block.
     pub circuit_breakers: tokio::sync::RwLock<rstn_core::circuit_breaker::CircuitBreaker>,
+    /// Forward-security ledger (long-range attack protection). Mirrors the
+    /// ConsensusEngine's forward-security state so RPC can query which keys
+    /// are authorized for which epochs. The runner syncs this after every
+    /// finalize. A node syncing from genesis checks every block signer
+    /// against this ledger.
+    pub forward_security: tokio::sync::RwLock<rstn_core::forward_security::ForwardSecurityLedger>,
+    /// Multi-source oracle aggregator (median + TWAP). The runner feeds
+    /// aggregated prices into the circuit breaker for deviation detection.
+    /// RPC exposes the current median + TWAP via rstn_getOraclePrice.
+    pub oracle: tokio::sync::RwLock<rstn_core::oracle::MultiSourceOracle>,
+    /// Permissionless relayer market for IBC. The runner settles delivery
+    /// orders on block finalization. RPC exposes the market via
+    /// rstn_getRelayerMarket.
+    pub relayer_market: tokio::sync::RwLock<rstn_core::relayer_market::RelayerMarket>,
+    /// IP-to-region geolocation engine. Used to verify validators' self-declared
+    /// regions against their actual network location. RPC exposes the
+    /// verification via rstn_getGeoVerification.
+    pub geo_ip: tokio::sync::RwLock<rstn_core::geo_ip::GeoIpLocator>,
 }
 
 /// RPC rate limit: max requests per IP per second.
@@ -370,6 +388,24 @@ pub async fn handle_rpc(req: RpcRequest, state: &RpcState) -> RpcResponse {
         // Returns the erasure-coded shards + Merkle proofs for a block so a
         // light client can sample and reconstruct via DAS-by-bits.
         "rstn_getDasShards" => get_das_shards(state, req.params.first()).await,
+
+        // -- Forward Security (long-range attack protection) --
+        // Returns the authorized validator pubkeys per epoch. A node syncing
+        // from genesis checks every block signer against this ledger.
+        "rstn_getForwardSecurity" => get_forward_security(state).await,
+
+        // -- Multi-Source Oracle (median + TWAP) --
+        // Returns the current median price + TWAP + trusted source count.
+        "rstn_getOraclePrice" => get_oracle_price(state).await,
+
+        // -- Permissionless Relayer Market (IBC) --
+        // Returns registered relayers + pending delivery orders.
+        "rstn_getRelayerMarket" => get_relayer_market(state).await,
+
+        // -- IP→Region Geolocation --
+        // Verifies a validator's self-declared region against its IP-derived
+        // region. Returns the actual region + whether it matches.
+        "rstn_getGeoVerification" => get_geo_verification(state, req.params.first()).await,
 
         // -- Unknown ---------------------------------------
         _ => Err(RpcError::MethodNotFound(req.method.clone())),
@@ -2913,5 +2949,97 @@ async fn get_das_shards(state: &RpcState, params: Option<&Value>) -> Result<Valu
         "m": blob.m,
         "shardCount": blob.shards.len(),
         "shards": shards,
+    }))
+}
+
+/// Forward-security ledger: returns the authorized validator pubkeys per
+/// epoch. A node syncing from genesis checks every block signer against this
+/// to reject long-range attacks (an attacker with a retired epoch key cannot
+/// sign blocks for a later epoch).
+async fn get_forward_security(state: &RpcState) -> Result<Value, RpcError> {
+    let fs = state.forward_security.read().await;
+    let epochs: Vec<Value> = fs.authorized_keys.iter().map(|set| {
+        let keys: Vec<String> = set.keys.iter().map(|k| hex::encode(k)).collect();
+        serde_json::json!({
+            "epoch": set.epoch,
+            "authorizedKeys": keys,
+            "validatorCount": keys.len(),
+        })
+    }).collect();
+    Ok(serde_json::json!({
+        "latestEpoch": fs.latest_epoch,
+        "pendingCommitments": fs.pending_commitments.len(),
+        "epochs": epochs,
+    }))
+}
+
+/// Multi-source oracle: returns the current median price + TWAP + trusted
+/// source count. The median is robust to up to floor((N-1)/2) compromised
+/// sources; the TWAP smooths short-term manipulation.
+async fn get_oracle_price(state: &RpcState) -> Result<Value, RpcError> {
+    let oracle = state.oracle.read().await;
+    Ok(serde_json::json!({
+        "medianPrice": oracle.current_price().to_string(),
+        "twap": oracle.twap().to_string(),
+        "trustedSources": oracle.trusted_source_count(),
+        "totalSources": oracle.sources.len(),
+        "twapWindowBlocks": oracle.twap_window,
+    }))
+}
+
+/// Permissionless relayer market: returns registered relayers + pending
+/// delivery orders. Anyone can register as a relayer (no gatekeeper); the
+/// lowest-fee relayer wins delivery; bonds are slashed for invalid packets.
+async fn get_relayer_market(state: &RpcState) -> Result<Value, RpcError> {
+    let market = state.relayer_market.read().await;
+    let relayers: Vec<Value> = market.relayers.values().map(|r| {
+        serde_json::json!({
+            "address": hex::encode(r.address),
+            "bond": r.bond.to_string(),
+            "successfulDeliveries": r.successful_deliveries,
+            "slashedCount": r.slashed_count,
+            "active": r.active,
+        })
+    }).collect();
+    let orders: Vec<Value> = market.orders.values().map(|o| {
+        serde_json::json!({
+            "orderId": hex::encode(o.order_id),
+            "maxFee": o.max_fee.to_string(),
+            "bidCount": o.bids.len(),
+            "delivered": o.delivered,
+            "winner": o.winner.map(|w| hex::encode(w)),
+        })
+    }).collect();
+    Ok(serde_json::json!({
+        "minBond": market.min_bond.to_string(),
+        "relayerCount": market.relayers.len(),
+        "pendingOrders": market.orders.len(),
+        "relayers": relayers,
+        "orders": orders,
+    }))
+}
+
+/// IP→region geolocation verification: verifies a validator's self-declared
+/// region against its IP-derived region. A mismatch means the validator is
+/// claiming to be in a region it's not actually running from (suspicious —
+/// could be trying to evade the geo cap).
+/// Params: { "ip": "1.2.3.4", "declaredRegion": "us-east" }
+async fn get_geo_verification(state: &RpcState, params: Option<&Value>) -> Result<Value, RpcError> {
+    let obj = params
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| RpcError::InvalidParams("expected {ip, declaredRegion}".into()))?;
+    let ip = obj.get("ip").and_then(|v| v.as_str())
+        .ok_or_else(|| RpcError::InvalidParams("missing ip".into()))?;
+    let declared = obj.get("declaredRegion").and_then(|v| v.as_str())
+        .ok_or_else(|| RpcError::InvalidParams("missing declaredRegion".into()))?;
+    let locator = state.geo_ip.read().await;
+    let actual = locator.lookup(ip);
+    let matches = actual == declared || actual == "unknown";
+    Ok(serde_json::json!({
+        "ip": ip,
+        "declaredRegion": declared,
+        "actualRegion": actual,
+        "verified": matches,
+        "mismatch": !matches,
     }))
 }
