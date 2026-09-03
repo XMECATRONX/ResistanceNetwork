@@ -1272,6 +1272,7 @@ async fn stake(state: &RpcState, params: Option<&Value>) -> Result<Value, RpcErr
             uptime: 1.0,
             blocks_produced: 0,
             status: rstn_core::ValidatorStatus::Active,
+            region: "unknown".to_string(), // G11 geo-cap: validators created via RPC shortcut default to uncapped
         });
     // Only overwrite pubkey if it's still zeros (don't clobber a real registered pubkey)
     if validator.pubkey.0 == [0u8; rstn_crypto::PUBKEY_SIZE] {
