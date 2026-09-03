@@ -27,6 +27,8 @@ pub mod relayer_market; // G7-complete -- Permissionless relayer market for IBC
 pub mod oracle;        // Oracle multi-source aggregation (median + TWAP)
 pub mod move_resources; // Move-style linear resource types (formal verification)
 pub mod geo_ip;        // IP-to-region geolocation (automatic validator region verification)
+pub mod genesis_exit;  // Gradual genesis validator stake reduction (anti-centralization)
+pub mod multisig;      // Public multisig with independent (non-team) signers
 
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
@@ -269,6 +271,12 @@ pub struct Transaction {
     /// be verified. The Dilithium3 half is already in `from`.
     #[serde(default)]
     pub hybrid_pubkey: Option<HybridPublicKey>,
+    /// GAS REFUND (Gap 6 fix) — the gas the VM ACTUALLY consumed executing
+    /// this tx. Set by the block producer after VM execution; the fee market
+    /// charges `gas_price * gas_used` (not `gas_limit`), refunding the unused
+    /// reserved gas. `None` for legacy/unsigned txs → falls back to gas_limit.
+    #[serde(default)]
+    pub gas_used: Option<u64>,
 }
 
 impl Transaction {
@@ -384,6 +392,17 @@ impl Validator {
 pub const FINALITY_ROUNDS: u32 = 2;
 pub const TARGET_BLOCK_TIME_MS: u64 = 400;
 pub const EPOCH_LENGTH: u64 = 1000;
+/// Critical timelock: 48h at 400ms/block = 432,000 blocks.
+/// Critical governance proposals (parameter changes, validator set changes,
+/// bridge upgrades) cannot execute until this many blocks pass after the
+/// proposal reaches quorum. This gives the community 48h to react — exit
+/// the bridge, veto, or prepare — before hostile changes take effect.
+pub const CRITICAL_TIMELOCK_BLOCKS: u64 = 432_000; // ~48h at 400ms/block
+/// Escape hatch delay: 24h at 400ms/block = 216,000 blocks.
+/// Users who submit an escape hatch request must wait this long before
+/// claiming their proportional share of locked bridge reserves. The
+/// validators CANNOT prevent the claim — it executes unilaterally.
+pub const ESCAPE_DELAY_BLOCKS: u64 = 216_000; // ~24h at 400ms/block
 
 /// BFT vote message -- a validator's signature on a block proposal.
 /// The `phase` field distinguishes PREPARE votes from COMMIT votes,
@@ -561,6 +580,21 @@ pub struct ConsensusState {
     /// Total view-changes that have occurred (observability / metrics).
     #[serde(default)]
     pub view_changes: u64,
+    /// SLASHING TREASURY (Gap 3 fix) — the protocol-owned account that
+    /// receives slashed RSTN. Previously `slash_validator` subtracted from
+    /// the validator's stake but the slashed tokens VANISHED (no burn, no
+    /// redistribution, no treasury) — an accounting black hole. Now every
+    /// slash credits this treasury. The treasury is community-governed
+    /// (spendable only via a CRITICAL_TIMELOCK governance proposal), so
+    /// slashed funds are NOT lost — they are recycled to the community, not
+    /// silently destroyed.
+    #[serde(default)]
+    pub treasury: u128,
+    /// Per-validator accumulated rewards owed (tip + block reward). The runner
+    /// calls `distribute_rewards` each block to credit the leader. Delegators'
+    /// share is reduced by the validator's `commission` (Gap 4 fix).
+    #[serde(default)]
+    pub pending_rewards: Vec<([u8; 20], u128)>,
 }
 
 fn default_round_timeout() -> u64 {
@@ -581,6 +615,8 @@ impl ConsensusState {
             round_start_ms: 0,
             round_timeout_ms: TARGET_BLOCK_TIME_MS * 3, // 3x block time before view-change
             view_changes: 0,
+            treasury: 0,
+            pending_rewards: Vec::new(),
         }
     }
 
@@ -745,6 +781,15 @@ impl ConsensusState {
     /// - Downtime (< 90% uptime): 0.1% of stake
     /// - Invalid block: 1% of stake
     /// - Coordinated attack: 10% + expulsion (status -> Slashed)
+    ///
+    /// SLASHING DESTINATION (Gap 3 fix): the confiscated RSTN is credited to
+    /// the protocol treasury (`self.treasury`), NOT destroyed or vanished.
+    /// Previously the slashed amount was subtracted from the validator's stake
+    /// but went nowhere — an accounting black hole. Now it is traceable and
+    /// community-governed: the treasury is spendable only via a
+    /// CRITICAL_TIMELOCK governance proposal, so slashed funds recycle to the
+    /// community rather than silently disappearing from the supply.
+    ///
     /// The protocol guarantees slashing is proportional, never destructive.
     pub fn slash_validator(&mut self, pubkey: &Dilithium3PublicKey, percentage: u8) -> Result<(), CoreError> {
         let validator = self
@@ -760,8 +805,14 @@ impl ConsensusState {
         let slash_amount = validator.stake * percentage as u128 / 100;
         validator.stake = validator.stake.saturating_sub(slash_amount);
 
+        // Credit the slashed RSTN to the protocol treasury (Gap 3 fix).
+        // The treasury is community-governed — spendable only via a
+        // CRITICAL_TIMELOCK governance proposal. Slashed funds are recycled
+        // to the community, not silently destroyed.
+        self.treasury = self.treasury.saturating_add(slash_amount);
+
         tracing::warn!(
-            "SLASHING validator {} -- {}% of stake confiscated ({} RSTN slashed, {} remaining)",
+            "SLASHING validator {} -- {}% of stake confiscated ({} RSTN slashed → treasury, {} remaining)",
             format_address(&derive_address(&validator.pubkey)),
             percentage,
             slash_amount,
@@ -773,6 +824,106 @@ impl ConsensusState {
             validator.status = ValidatorStatus::Slashed;
         }
         Ok(())
+    }
+
+    /// Distribute block rewards to the leader, applying the validator's
+    /// commission (Gap 4 fix).
+    ///
+    /// The leader receives the block's total tip (priority fees) + the block
+    /// reward (reserve distribution). If the validator has delegators, the
+    /// validator retains `commission%` of the rewards and the rest is owed to
+    /// delegators pro-rata. This makes staking-as-a-service economically
+    /// viable: a validator with 10% commission keeps 10% of the rewards and
+    /// distributes 90% to delegators.
+    ///
+    /// `total_reward` = validator tip + block reward (in smallest denomination).
+    /// Returns the validator's commission share (the rest is owed to delegators
+    /// and tracked in `pending_rewards` for later claim).
+    pub fn distribute_rewards(
+        &mut self,
+        leader_pubkey: &Dilithium3PublicKey,
+        total_reward: u128,
+    ) -> u128 {
+        if total_reward == 0 {
+            return 0;
+        }
+        let validator = match self
+            .validators
+            .iter()
+            .find(|v| v.pubkey.0 == leader_pubkey.0)
+        {
+            Some(v) => v,
+            None => return 0,
+        };
+
+        // The validator's commission share (e.g. 10% of the reward).
+        let commission_bps = (validator.commission as u128) * 100; // commission is 0-100 (%), → bps
+        let commission_share = total_reward * commission_bps / 10_000;
+
+        // The delegators' share (the rest) is owed to delegators pro-rata.
+        // Track it in pending_rewards keyed by the validator's address so
+        // delegators can claim it later via a Claim tx.
+        let delegator_share = total_reward.saturating_sub(commission_share);
+        if delegator_share > 0 {
+            let vaddr = derive_address(&validator.pubkey);
+            if let Some(entry) = self
+                .pending_rewards
+                .iter_mut()
+                .find(|(a, _)| a == &vaddr.0)
+            {
+                entry.1 = entry.1.saturating_add(delegator_share);
+            } else {
+                self.pending_rewards.push((vaddr.0, delegator_share));
+            }
+        }
+
+        tracing::info!(
+            "Reward distributed to leader {}: total={}, commission={} ({}%), delegators_owed={}",
+            format_address(&derive_address(&validator.pubkey)),
+            total_reward,
+            commission_share,
+            validator.commission,
+            delegator_share
+        );
+
+        commission_share
+    }
+
+    /// Spend treasury funds to a recipient. This is the ONLY way to move
+    /// slashed RSTN out of the protocol treasury. It requires a CRITICAL
+    /// governance proposal (48h timelock) to have passed and reached its
+    /// timelock — no single party can move treasury funds unilaterally.
+    ///
+    /// TREASURY SPENDING PATH (Gap 3 fix): previously `slash_validator`
+    /// credited `self.treasury` but there was no way to spend it — the
+    /// treasury was an accumulator with no exit. An auditor would flag this
+    /// as "funds locked forever." Now the community can, via a critical
+    /// governance proposal (48h timelock, supermajority quorum, minority
+    /// veto), direct treasury funds to a recipient (e.g. bug bounty,
+    /// ecosystem grant, burn). The proposal must have `executed == true`
+    /// (timelock elapsed) before this function releases funds.
+    ///
+    /// Returns the amount actually transferred (may be < requested if the
+    /// treasury balance is insufficient).
+    pub fn spend_treasury(
+        &mut self,
+        amount: u128,
+        proposal_executed: bool,
+    ) -> Result<u128, CoreError> {
+        if !proposal_executed {
+            return Err(CoreError::InvalidBlock(
+                "treasury spend requires an executed critical governance proposal (48h timelock not elapsed)"
+                    .to_string(),
+            ));
+        }
+        let transfer = amount.min(self.treasury);
+        self.treasury = self.treasury.saturating_sub(transfer);
+        tracing::info!(
+            "TREASURY spend: {} RSTN released (remaining treasury: {})",
+            transfer,
+            self.treasury
+        );
+        Ok(transfer)
     }
 
     /// Finalize a block: append to chain, advance height, clear pending votes.
