@@ -2,6 +2,10 @@
 
 **The first post-quantum Layer 1 blockchain. Built in Rust. Resistant to Shor.**
 
+> **📋 Canonical spec:** `PROTOCOL_SPEC.md` is the single source of truth.
+> **🔒 Scope:** FROZEN (2026-09-03). No new features until Pre-Mainnet Checklist (§11) is 100%.
+> If any doc contradicts `PROTOCOL_SPEC.md`, the spec wins.
+
 RSTN is a sovereign Layer 1 blockchain designed with post-quantum cryptography from genesis. Every on-chain signature and every consensus vote uses NIST-standardized PQ schemes (Dilithium3, Kyber768, SPHINCS+). The P2P transport base is libp2p Noise (X25519, classical) with PQ confidentiality layered at the application level (PQ wire-level encryption for direct peer streams + PQ gossipsub broadcast under a committee group key); full Noise replacement requires a libp2p fork (upstream PR pending). When quantum computers break ECDSA and Ed25519, Resistance stands.
 
 ```
